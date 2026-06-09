@@ -380,6 +380,7 @@ class FilterDropdown extends StatelessWidget {
           onChanged: onChanged,
           style: const TextStyle(
               fontSize: 12,
+              fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
               fontFamily: 'Sora'),
           dropdownColor: AppColors.surface,

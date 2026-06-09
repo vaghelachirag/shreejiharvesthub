@@ -1,9 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
-import '../../core/constants/app_constants.dart';
+import '../services/firebase_service.dart';
+import 'auth_provider.dart';
 
-final _uuid = Uuid();
+const _uuid = Uuid();
 
 // ── DATE FILTER STATE ─────────────────────────────────────────────────────────
 enum DateRange { day, month, all }
@@ -18,18 +19,17 @@ class DateFilterState {
   }) : activeDate = activeDate ?? DateTime.now();
 
   DateFilterState copyWith({DateRange? range, DateTime? activeDate}) =>
-      DateFilterState(range: range ?? this.range, activeDate: activeDate ?? this.activeDate);
+      DateFilterState(
+          range: range ?? this.range,
+          activeDate: activeDate ?? this.activeDate);
 }
-
-final dateFilterProvider = StateNotifierProvider<DateFilterNotifier, DateFilterState>((ref) {
-  return DateFilterNotifier();
-});
 
 class DateFilterNotifier extends StateNotifier<DateFilterState> {
   DateFilterNotifier() : super(DateFilterState(activeDate: DateTime.now()));
 
   void setRange(DateRange range) => state = state.copyWith(range: range);
-  void setDate(DateTime date) => state = state.copyWith(activeDate: date);
+  void setDate(DateTime date)    => state = state.copyWith(activeDate: date);
+
   void previousPeriod() {
     final d = state.activeDate;
     state = state.copyWith(
@@ -38,6 +38,7 @@ class DateFilterNotifier extends StateNotifier<DateFilterState> {
           : DateTime(d.year, d.month - 1, 1),
     );
   }
+
   void nextPeriod() {
     final d = state.activeDate;
     state = state.copyWith(
@@ -46,189 +47,224 @@ class DateFilterNotifier extends StateNotifier<DateFilterState> {
           : DateTime(d.year, d.month + 1, 1),
     );
   }
+
   void goToday() => state = state.copyWith(activeDate: DateTime.now());
 }
 
-// ── APP DATA STATE ────────────────────────────────────────────────────────────
-class AppDataState {
-  final List<Farm> farms;
-  final List<Mandi> mandis;
-  final List<Crop> crops;
-  final List<Sale> sales;
-  final List<Expense> expenses;
-  final List<String> categories;
+final dateFilterProvider =
+    StateNotifierProvider<DateFilterNotifier, DateFilterState>(
+        (_) => DateFilterNotifier());
 
-  const AppDataState({
-    required this.farms, required this.mandis, required this.crops,
-    required this.sales, required this.expenses, required this.categories,
-  });
+// ── FIRESTORE STREAM PROVIDERS ────────────────────────────────────────────────
+final _svcProvider =
+    Provider<FirebaseService>((ref) => FirebaseService.instance);
 
-  AppDataState copyWith({
-    List<Farm>? farms, List<Mandi>? mandis, List<Crop>? crops,
-    List<Sale>? sales, List<Expense>? expenses, List<String>? categories,
-  }) => AppDataState(
-        farms: farms ?? this.farms, mandis: mandis ?? this.mandis,
-        crops: crops ?? this.crops, sales: sales ?? this.sales,
-        expenses: expenses ?? this.expenses, categories: categories ?? this.categories,
-      );
+final farmsStreamProvider = StreamProvider<List<Farm>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isLoggedIn) return Stream.value(<Farm>[]);
+  return ref.read(_svcProvider).farmsStream();
+});
+
+final mandisStreamProvider = StreamProvider<List<Mandi>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isLoggedIn) return Stream.value(<Mandi>[]);
+  return ref.read(_svcProvider).mandisStream();
+});
+
+final cropsStreamProvider = StreamProvider<List<Crop>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isLoggedIn) return Stream.value(<Crop>[]);
+  return ref.read(_svcProvider).cropsStream();
+});
+
+final salesStreamProvider = StreamProvider<List<Sale>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isLoggedIn) return Stream.value(<Sale>[]);
+  return ref.read(_svcProvider).salesStream();
+});
+
+final expensesStreamProvider = StreamProvider<List<Expense>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!auth.isLoggedIn) return Stream.value(<Expense>[]);
+  return ref.read(_svcProvider).expensesStream();
+});
+
+final categoriesProvider =
+    StateNotifierProvider<CategoriesNotifier, List<String>>((ref) {
+  final auth = ref.watch(authProvider);
+  return CategoriesNotifier(ref.read(_svcProvider), auth.isLoggedIn);
+});
+
+// ── CATEGORIES NOTIFIER ───────────────────────────────────────────────────────
+class CategoriesNotifier extends StateNotifier<List<String>> {
+  final FirebaseService _svc;
+
+  CategoriesNotifier(this._svc, bool loggedIn)
+      : super(['Labour', 'Transport', 'Supplies', 'Fertilizer', 'Loan', 'Misc']) {
+    if (loggedIn) _load();
+  }
+
+  Future<void> _load() async {
+    final cats = await _svc.fetchCategories();
+    if (cats.isNotEmpty) state = cats;
+  }
+
+  Future<void> add(String cat) async {
+    if (state.contains(cat)) return;
+    final updated = List<String>.from(state)..add(cat);
+    state = updated;
+    await _svc.saveCategories(updated);
+  }
+
+  Future<void> remove(String cat) async {
+    final updated = state.where((c) => c != cat).toList();
+    state = updated;
+    await _svc.saveCategories(updated);
+  }
 }
 
-class AppDataNotifier extends StateNotifier<AppDataState> {
-  AppDataNotifier() : super(_seedData());
+// ── ACTIONS PROVIDER ──────────────────────────────────────────────────────────
+final firebaseActionsProvider = Provider<FirebaseDataActions>(
+    (ref) => FirebaseDataActions(ref.read(_svcProvider)));
 
-  // ── FARMS ──
-  void addFarm(Farm farm) => state = state.copyWith(farms: [...state.farms, farm]);
-  void updateFarm(Farm farm) => state = state.copyWith(
-        farms: state.farms.map((f) => f.id == farm.id ? farm : f).toList());
-  void deleteFarm(String id) {
-    state = state.copyWith(
-      farms: state.farms.where((f) => f.id != id).toList(),
-      mandis: state.mandis.where((m) => m.farmId != id).toList(),
-    );
-  }
+class FirebaseDataActions {
+  final FirebaseService _svc;
+  FirebaseDataActions(this._svc);
 
-  // ── MANDIS ──
-  void addMandi(Mandi mandi) => state = state.copyWith(mandis: [...state.mandis, mandi]);
-  void updateMandi(Mandi mandi) => state = state.copyWith(
-        mandis: state.mandis.map((m) => m.id == mandi.id ? mandi : m).toList());
-  void deleteMandi(String id) =>
-      state = state.copyWith(mandis: state.mandis.where((m) => m.id != id).toList());
+  String newId(String prefix) => '$prefix${_uuid.v4().substring(0, 8)}';
 
-  // ── CROPS ──
-  void addCrop(Crop crop) => state = state.copyWith(crops: [...state.crops, crop]);
-  void updateCrop(Crop crop) => state = state.copyWith(
-        crops: state.crops.map((c) => c.id == crop.id ? crop : c).toList());
-  void deleteCrop(String id) =>
-      state = state.copyWith(crops: state.crops.where((c) => c.id != id).toList());
+  Future<void> addFarm(Farm f)           => _svc.addFarm(f);
+  Future<void> updateFarm(Farm f)        => _svc.updateFarm(f);
+  Future<void> deleteFarm(String id)     => _svc.deleteFarm(id);
 
-  // ── SALES ──
-  void addSale(Sale sale) => state = state.copyWith(sales: [...state.sales, sale]);
-  void updateSale(Sale sale) => state = state.copyWith(
-        sales: state.sales.map((s) => s.id == sale.id ? sale : s).toList());
-  void deleteSale(String id) =>
-      state = state.copyWith(sales: state.sales.where((s) => s.id != id).toList());
+  Future<void> addMandi(Mandi m)         => _svc.addMandi(m);
+  Future<void> updateMandi(Mandi m)      => _svc.updateMandi(m);
+  Future<void> deleteMandi(String id)    => _svc.deleteMandi(id);
 
-  // ── EXPENSES ──
-  void addExpense(Expense exp) => state = state.copyWith(expenses: [...state.expenses, exp]);
-  void updateExpense(Expense exp) => state = state.copyWith(
-        expenses: state.expenses.map((e) => e.id == exp.id ? exp : e).toList());
-  void deleteExpense(String id) =>
-      state = state.copyWith(expenses: state.expenses.where((e) => e.id != id).toList());
+  Future<void> addCrop(Crop c)           => _svc.addCrop(c);
+  Future<void> updateCrop(Crop c)        => _svc.updateCrop(c);
+  Future<void> deleteCrop(String id)     => _svc.deleteCrop(id);
 
-  // ── CATEGORIES ──
-  void addCategory(String cat) {
-    if (!state.categories.contains(cat)) {
-      state = state.copyWith(categories: [...state.categories, cat]);
-    }
-  }
-  void deleteCategory(String cat) =>
-      state = state.copyWith(categories: state.categories.where((c) => c != cat).toList());
+  Future<void> addSale(Sale s)           => _svc.addSale(s);
+  Future<void> updateSale(Sale s)        => _svc.updateSale(s);
+  Future<void> deleteSale(String id)     => _svc.deleteSale(id);
 
-  // ── FILTER HELPER ──
-  List<Sale> filteredSales(DateRange range, DateTime activeDate,
+  Future<void> addExpense(Expense e)     => _svc.addExpense(e);
+  Future<void> updateExpense(Expense e)  => _svc.updateExpense(e);
+  Future<void> deleteExpense(String id)  => _svc.deleteExpense(id);
+
+  List<Sale> filteredSales(List<Sale> all, DateRange range, DateTime date,
       {String farmId = '', String mandiId = '', String cropId = ''}) {
-    return state.sales.where((s) {
-      if (!_matchesDate(s.date, range, activeDate)) return false;
-      if (farmId.isNotEmpty && s.farmId != farmId) return false;
-      if (mandiId.isNotEmpty && s.mandiId != mandiId) return false;
-      if (cropId.isNotEmpty && s.cropId != cropId) return false;
+    return all.where((s) {
+      if (!_matchDate(s.date, range, date)) return false;
+      if (farmId.isNotEmpty   && s.farmId  != farmId)  return false;
+      if (mandiId.isNotEmpty  && s.mandiId != mandiId) return false;
+      if (cropId.isNotEmpty   && s.cropId  != cropId)  return false;
       return true;
-    }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    }).toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  List<Expense> filteredExpenses(DateRange range, DateTime activeDate,
+  List<Expense> filteredExpenses(List<Expense> all, DateRange range, DateTime date,
       {String farmId = '', String mandiId = '', String cropId = '', String cat = ''}) {
-    return state.expenses.where((e) {
-      if (!_matchesDate(e.date, range, activeDate)) return false;
-      if (farmId.isNotEmpty && e.farmId != farmId) return false;
-      if (mandiId.isNotEmpty && e.mandiId != mandiId) return false;
-      if (cropId.isNotEmpty && e.cropId != cropId) return false;
-      if (cat.isNotEmpty && e.cat != cat) return false;
+    return all.where((e) {
+      if (!_matchDate(e.date, range, date)) return false;
+      if (farmId.isNotEmpty   && e.farmId  != farmId)  return false;
+      if (mandiId.isNotEmpty  && e.mandiId != mandiId) return false;
+      if (cropId.isNotEmpty   && e.cropId  != cropId)  return false;
+      if (cat.isNotEmpty      && e.cat     != cat)     return false;
       return true;
-    }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    }).toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 
-  static bool _matchesDate(String date, DateRange range, DateTime active) {
+  static bool _matchDate(String date, DateRange range, DateTime active) {
     if (range == DateRange.all) return true;
     try {
       final d = DateTime.parse(date);
       if (range == DateRange.day) {
-        return d.year == active.year && d.month == active.month && d.day == active.day;
-      } else {
-        return d.year == active.year && d.month == active.month;
+        return d.year == active.year &&
+            d.month == active.month &&
+            d.day == active.day;
       }
+      return d.year == active.year && d.month == active.month;
     } catch (_) {
       return false;
     }
   }
-
-  String newId(String prefix) => '$prefix${_uuid.v4().substring(0, 8)}';
 }
 
-final appDataProvider = StateNotifierProvider<AppDataNotifier, AppDataState>((ref) {
-  return AppDataNotifier();
+// ── COMPAT SHIM ───────────────────────────────────────────────────────────────
+// FIX: .valueOrNull loses generic type in dart2js release builds → List<dynamic>
+// Use .when() with explicit typed empty lists to preserve List<Farm> etc.
+
+/// Safely extract List<Farm> from AsyncValue without losing type in release mode.
+List<Farm> _safeFarms(AsyncValue<List<Farm>> av) =>
+    av.when(data: (v) => v, loading: () => <Farm>[], error: (_, __) => <Farm>[]);
+
+List<Mandi> _safeMandis(AsyncValue<List<Mandi>> av) =>
+    av.when(data: (v) => v, loading: () => <Mandi>[], error: (_, __) => <Mandi>[]);
+
+List<Crop> _safeCrops(AsyncValue<List<Crop>> av) =>
+    av.when(data: (v) => v, loading: () => <Crop>[], error: (_, __) => <Crop>[]);
+
+List<Sale> _safeSales(AsyncValue<List<Sale>> av) =>
+    av.when(data: (v) => v, loading: () => <Sale>[], error: (_, __) => <Sale>[]);
+
+List<Expense> _safeExpenses(AsyncValue<List<Expense>> av) =>
+    av.when(data: (v) => v, loading: () => <Expense>[], error: (_, __) => <Expense>[]);
+
+final appDataProvider = Provider<_AppDataCompat>((ref) {
+  // Use typed helper functions — NOT .valueOrNull which erases generics
+  final farms    = _safeFarms(ref.watch(farmsStreamProvider));
+  final mandis   = _safeMandis(ref.watch(mandisStreamProvider));
+  final crops    = _safeCrops(ref.watch(cropsStreamProvider));
+  final sales    = _safeSales(ref.watch(salesStreamProvider));
+  final expenses = _safeExpenses(ref.watch(expensesStreamProvider));
+  final cats     = ref.watch(categoriesProvider);
+  final actions  = ref.watch(firebaseActionsProvider);
+  return _AppDataCompat(farms, mandis, crops, sales, expenses, cats, actions);
 });
 
-// ── SEED DATA (from HTML) ─────────────────────────────────────────────────────
-AppDataState _seedData() => AppDataState(
-      categories: List.from(AppConstants.defaultCategories),
-      farms: const [
-        Farm(id: 'f1', name: 'Jamalpur Farm', type: 'Vegetable', area: '3 acres', address: 'APMC, Jamalpur, Ahmedabad'),
-        Farm(id: 'f2', name: 'Aslali Farm', type: 'Vegetable', area: '2.5 acres', address: 'Karnavati, Aslali'),
-        Farm(id: 'f3', name: 'Mehsana Farm', type: 'Vegetable', area: '2 acres', address: 'Sabji Mandi, Mehsana'),
-      ],
-      mandis: const [
-        Mandi(id: 'm1', farmId: '', name: 'APMC Jamalpur', location: 'Jamalpur, Ahmedabad'),
-        Mandi(id: 'm2', farmId: '', name: 'Local Market', location: 'Jamalpur, Ahmedabad'),
-        Mandi(id: 'm3', farmId: '', name: 'APMC Karnavati', location: 'Aslali, Ahmedabad'),
-        Mandi(id: 'm4', farmId: '', name: 'Mehsana Mandi', location: 'Mehsana'),
-      ],
-      crops: const [
-        Crop(id: 'c1', farmId: 'f1', name: 'Tomato', start: '2026-01-15', end: '2026-04-20'),
-        Crop(id: 'c2', farmId: 'f1', name: 'Okra', start: '2026-03-01', end: '2026-06-15'),
-        Crop(id: 'c3', farmId: 'f2', name: 'Cabbage', start: '2026-02-10', end: '2026-05-05'),
-        Crop(id: 'c4', farmId: 'f3', name: 'Brinjal', start: '2026-02-20', end: '2026-05-30'),
-      ],
-      sales: const [
-        Sale(id: '1', date: '2026-03-02', buyer: 'Maqbulbhai-67', qty: 800, rate: 11.5, amount: 9200, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Cash'),
-        Sale(id: '2', date: '2026-03-05', buyer: 'Maqbulbhai-67', qty: 2000, rate: 11, amount: 22000, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Cash'),
-        Sale(id: '3', date: '2026-03-06', buyer: 'Prakashbhai-91', qty: 2200, rate: 0, amount: 16440, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Online'),
-        Sale(id: '4', date: '2026-03-07', buyer: 'Arifbhai-72', qty: 2220, rate: 0, amount: 19980, farmId: 'f3', mandiId: 'm4', cropId: 'c4', payMode: 'Cash'),
-        Sale(id: '5', date: '2026-03-07', buyer: 'Prakashbhai-91', qty: 200, rate: 0, amount: 18660, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Other'),
-        Sale(id: '6', date: '2026-03-09', buyer: 'Arifbhai-72', qty: 1560, rate: 8, amount: 12480, farmId: 'f3', mandiId: 'm4', cropId: 'c4', payMode: 'Online'),
-        Sale(id: '7', date: '2026-03-13', buyer: 'Prakashbhai-33', qty: 2220, rate: 0, amount: 22080, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Cash'),
-        Sale(id: '8', date: '2026-03-14', buyer: 'Prakashbhai-33', qty: 1320, rate: 12, amount: 15840, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Cash'),
-        Sale(id: '9', date: '2026-03-17', buyer: 'Prakashbhai-91', qty: 1520, rate: 0, amount: 17400, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Online'),
-        Sale(id: '10', date: '2026-03-18', buyer: 'Prakashbhai-91', qty: 2300, rate: 0, amount: 23850, farmId: 'f1', mandiId: 'm2', cropId: 'c2', payMode: 'Other'),
-        Sale(id: '11', date: '2026-03-19', buyer: 'Prakashbhai-33', qty: 2080, rate: 11, amount: 22880, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Cash'),
-        Sale(id: '12', date: '2026-03-23', buyer: 'Prakashbhai-91', qty: 1520, rate: 0, amount: 15700, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Online'),
-        Sale(id: '13', date: '2026-03-28', buyer: 'Prakashbhai-67', qty: 2340, rate: 0, amount: 23550, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Cash'),
-        Sale(id: '14', date: '2026-03-30', buyer: 'Prakashbhai-67', qty: 2000, rate: 0, amount: 18400, farmId: 'f1', mandiId: 'm2', cropId: 'c2', payMode: 'Cash'),
-      ],
-      expenses: const [
-        Expense(id: 'e1', date: '2026-03-02', desc: 'Labour charges', cat: 'Labour', amount: 500, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Cash'),
-        Expense(id: 'e2', date: '2026-03-02', desc: 'Plastic bags + tea/coffee', cat: 'Supplies', amount: 1960, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Cash'),
-        Expense(id: 'e3', date: '2026-03-02', desc: 'Transport (tempo)', cat: 'Transport', amount: 2000, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Online'),
-        Expense(id: 'e4', date: '2026-03-05', desc: 'Labour charges', cat: 'Labour', amount: 1500, farmId: 'f1', mandiId: 'm2', cropId: 'c1', payMode: 'Cash'),
-        Expense(id: 'e5', date: '2026-03-05', desc: 'Supplies (bags etc)', cat: 'Supplies', amount: 1060, farmId: 'f1', mandiId: 'm2', cropId: 'c1', payMode: 'Other'),
-        Expense(id: 'e6', date: '2026-03-06', desc: 'Labour charges', cat: 'Labour', amount: 600, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Online'),
-        Expense(id: 'e7', date: '2026-03-07', desc: 'Labour + auto rent (Ramnagar)', cat: 'Labour', amount: 4520, farmId: 'f3', mandiId: 'm4', cropId: 'c4', payMode: 'Cash'),
-        Expense(id: 'e8', date: '2026-03-07', desc: 'Transport (tempo)', cat: 'Transport', amount: 5000, farmId: 'f3', mandiId: 'm4', cropId: 'c4', payMode: 'Cash'),
-        Expense(id: 'e9', date: '2026-03-08', desc: 'Labour + auto rent', cat: 'Labour', amount: 1610, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Online'),
-        Expense(id: 'e10', date: '2026-03-10', desc: 'Withdraw for Prasad', cat: 'Misc', amount: 5000, farmId: 'f1', mandiId: 'm1', cropId: 'c1', payMode: 'Other'),
-        Expense(id: 'e11', date: '2026-03-13', desc: 'Labour + auto rent', cat: 'Labour', amount: 2960, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Cash'),
-        Expense(id: 'e12', date: '2026-03-14', desc: 'Supplies', cat: 'Supplies', amount: 2000, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Online'),
-        Expense(id: 'e13', date: '2026-03-16', desc: 'Payment — cement/bricks', cat: 'Misc', amount: 23000, farmId: 'f1', mandiId: 'm2', cropId: 'c2', payMode: 'Cash'),
-        Expense(id: 'e14', date: '2026-03-16', desc: 'Payment — fertilizer/pesticides', cat: 'Fertilizer', amount: 24200, farmId: 'f1', mandiId: 'm2', cropId: 'c2', payMode: 'Cash'),
-        Expense(id: 'e15', date: '2026-03-17', desc: 'Labour charges', cat: 'Labour', amount: 550, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Online'),
-        Expense(id: 'e16', date: '2026-03-19', desc: 'Labour charges', cat: 'Labour', amount: 1400, farmId: 'f2', mandiId: 'm3', cropId: 'c3', payMode: 'Cash'),
-        Expense(id: 'e17', date: '2026-03-21', desc: 'Hose pipe and spray gun', cat: 'Supplies', amount: 3500, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Cash'),
-        Expense(id: 'e18', date: '2026-03-23', desc: 'Labour charges', cat: 'Labour', amount: 2200, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Online'),
-        Expense(id: 'e19', date: '2026-03-24', desc: 'CGTMSE collateral (greenhouse loan)', cat: 'Loan', amount: 27000, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Cash'),
-        Expense(id: 'e20', date: '2026-03-28', desc: 'Labour charges', cat: 'Labour', amount: 2200, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Other'),
-        Expense(id: 'e21', date: '2026-03-30', desc: 'Labour + supplies', cat: 'Labour', amount: 2550, farmId: 'f1', mandiId: 'm2', cropId: 'c2', payMode: 'Online'),
-        Expense(id: 'e22', date: '2026-03-20', desc: 'Petrol — Tersanpara + Reliance', cat: 'Transport', amount: 710, farmId: 'f1', mandiId: 'm1', cropId: 'c2', payMode: 'Cash'),
-      ],
-    );
+class _AppDataCompat {
+  final List<Farm>    farms;
+  final List<Mandi>   mandis;
+  final List<Crop>    crops;
+  final List<Sale>    sales;
+  final List<Expense> expenses;
+  final List<String>  categories;
+  final FirebaseDataActions _a;
+
+  _AppDataCompat(this.farms, this.mandis, this.crops,
+      this.sales, this.expenses, this.categories, this._a);
+
+  String newId(String p) => _a.newId(p);
+
+  Future<void> addFarm(Farm f)           => _a.addFarm(f);
+  Future<void> updateFarm(Farm f)        => _a.updateFarm(f);
+  Future<void> deleteFarm(String id)     => _a.deleteFarm(id);
+
+  Future<void> addMandi(Mandi m)         => _a.addMandi(m);
+  Future<void> updateMandi(Mandi m)      => _a.updateMandi(m);
+  Future<void> deleteMandi(String id)    => _a.deleteMandi(id);
+
+  Future<void> addCrop(Crop c)           => _a.addCrop(c);
+  Future<void> updateCrop(Crop c)        => _a.updateCrop(c);
+  Future<void> deleteCrop(String id)     => _a.deleteCrop(id);
+
+  Future<void> addSale(Sale s)           => _a.addSale(s);
+  Future<void> updateSale(Sale s)        => _a.updateSale(s);
+  Future<void> deleteSale(String id)     => _a.deleteSale(id);
+
+  Future<void> addExpense(Expense e)     => _a.addExpense(e);
+  Future<void> updateExpense(Expense e)  => _a.updateExpense(e);
+  Future<void> deleteExpense(String id)  => _a.deleteExpense(id);
+
+  List<Sale> filteredSales(DateRange range, DateTime date,
+      {String farmId = '', String mandiId = '', String cropId = ''}) =>
+      _a.filteredSales(sales, range, date,
+          farmId: farmId, mandiId: mandiId, cropId: cropId);
+
+  List<Expense> filteredExpenses(DateRange range, DateTime date,
+      {String farmId = '', String mandiId = '', String cropId = '', String cat = ''}) =>
+      _a.filteredExpenses(expenses, range, date,
+          farmId: farmId, mandiId: mandiId, cropId: cropId, cat: cat);
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers/app_data_provider.dart';
@@ -13,22 +14,16 @@ Future<void> showSaleFormDialog(
   );
 }
 
-// ── BREAKDOWN ROW STATE ───────────────────────────────────────────────────────
+// ── BREAKDOWN ROW ─────────────────────────────────────────────────────────────
 class _BdRow {
-  final TextEditingController qty;
-  final TextEditingController rate;
-  _BdRow()
-      : qty = TextEditingController(),
-        rate = TextEditingController();
+  final TextEditingController qty  = TextEditingController();
+  final TextEditingController rate = TextEditingController();
   double get sub {
-    final q = double.tryParse(qty.text) ?? 0;
+    final q = double.tryParse(qty.text)  ?? 0;
     final r = double.tryParse(rate.text) ?? 0;
     return q * r;
   }
-  void dispose() {
-    qty.dispose();
-    rate.dispose();
-  }
+  void dispose() { qty.dispose(); rate.dispose(); }
 }
 
 // ── DIALOG ────────────────────────────────────────────────────────────────────
@@ -36,38 +31,48 @@ class _SaleFormDialog extends ConsumerStatefulWidget {
   final Sale? existing;
   final WidgetRef outerRef;
   const _SaleFormDialog({this.existing, required this.outerRef});
-
   @override
   ConsumerState<_SaleFormDialog> createState() => _State();
 }
 
 class _State extends ConsumerState<_SaleFormDialog> {
-  final _buyerCtrl = TextEditingController();
-  final _overrideCtrl = TextEditingController(); // override gross
-  final _deductCtrl = TextEditingController();
-  String _date = '';
-  String _farmId = '';
+  // Controllers
+  final _buyerCtrl    = TextEditingController();
+  final _overrideCtrl = TextEditingController();
+  final _deductCtrl   = TextEditingController();
+
+  // State
+  String _date    = '';
+  String _farmId  = '';
   String _mandiId = '';
-  String _cropId = '';
+  String _cropId  = '';
   String _payMode = 'Cash';
+  String? _validationError;
 
   final List<_BdRow> _rows = [];
 
-  // ── computed ──
-  double get _grossFromRows =>
-      _rows.fold(0.0, (sum, r) => sum + r.sub);
-
+  // ── Computed ──────────────────────────────────────────────────────────────
+  double get _grossFromRows => _rows.fold(0.0, (s, r) => s + r.sub);
   double get _grossAmount {
-    final override = double.tryParse(_overrideCtrl.text);
-    return (override != null && override > 0) ? override : _grossFromRows;
+    final ov = double.tryParse(_overrideCtrl.text);
+    return (ov != null && ov > 0) ? ov : _grossFromRows;
   }
+  double get _deduction  => double.tryParse(_deductCtrl.text) ?? 0;
+  double get _netAmount  => _grossAmount - _deduction;
+  double get _totalQty   => _rows.fold(0.0, (s, r) => s + (double.tryParse(r.qty.text) ?? 0));
 
-  double get _deduction => double.tryParse(_deductCtrl.text) ?? 0;
-  double get _netAmount => _grossAmount - _deduction;
-
-  // ── total qty from breakdown ──
-  double get _totalQty =>
-      _rows.fold(0.0, (sum, r) => sum + (double.tryParse(r.qty.text) ?? 0));
+  // ── Buyer suggestions ─────────────────────────────────────────────────────
+  List<String> get _buyerSuggestions {
+    final all = widget.outerRef.read(appDataProvider).sales
+        .map((s) => s.buyer)
+        .where((b) => b.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final q = _buyerCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) return all.take(8).toList();
+    return all.where((b) => b.toLowerCase().contains(q)).take(8).toList();
+  }
 
   @override
   void initState() {
@@ -77,85 +82,87 @@ class _State extends ConsumerState<_SaleFormDialog> {
     if (e != null) {
       _buyerCtrl.text = e.buyer;
       _deductCtrl.text = e.deduction > 0 ? e.deduction.toStringAsFixed(0) : '';
-      _date = e.date;
-      _farmId = e.farmId;
-      _mandiId = e.mandiId;
-      _cropId = e.cropId;
-      _payMode = e.payMode;
-      // Restore breakdown rows
+      _date = e.date; _farmId = e.farmId; _mandiId = e.mandiId;
+      _cropId = e.cropId; _payMode = e.payMode;
       if (e.breakdown.isNotEmpty) {
         for (final b in e.breakdown) {
-          final row = _BdRow();
-          row.qty.text = b.qty.toString();
-          row.rate.text = b.rate.toString();
-          _rows.add(row);
+          final r = _BdRow();
+          r.qty.text  = b.qty.toString();
+          r.rate.text = b.rate.toString();
+          _rows.add(r);
         }
-        // If amount doesn't match computed, put it in override
         final computed = e.breakdown.fold<double>(0, (s, b) => s + b.sub);
-        if ((computed - e.amount).abs() > 1) {
-          _overrideCtrl.text = e.amount.toStringAsFixed(0);
-        }
+        if ((computed - e.amount).abs() > 1) _overrideCtrl.text = e.amount.toStringAsFixed(0);
       } else {
-        // Legacy: single row from qty+rate, or override
         if (e.rate > 0) {
-          final row = _BdRow();
-          row.qty.text = e.qty.toStringAsFixed(0);
-          row.rate.text = e.rate.toStringAsFixed(2);
-          _rows.add(row);
+          final r = _BdRow();
+          r.qty.text  = e.qty.toStringAsFixed(0);
+          r.rate.text = e.rate.toStringAsFixed(0);
+          _rows.add(r);
         } else {
           _overrideCtrl.text = e.amount.toStringAsFixed(0);
           _rows.add(_BdRow());
         }
       }
     } else {
-      _date = DateTime.now().toIso8601String().substring(0, 10);
+      _date   = DateTime.now().toIso8601String().substring(0, 10);
       _farmId = data.farms.isNotEmpty ? data.farms.first.id : '';
-      _rows.add(_BdRow()); // start with one empty row
+      _rows.add(_BdRow());
     }
   }
 
   @override
   void dispose() {
-    _buyerCtrl.dispose();
-    _overrideCtrl.dispose();
-    _deductCtrl.dispose();
+    _buyerCtrl.dispose(); _overrideCtrl.dispose(); _deductCtrl.dispose();
     for (final r in _rows) r.dispose();
     super.dispose();
   }
 
   void _addRow() => setState(() => _rows.add(_BdRow()));
+  void _removeRow(int i) { _rows[i].dispose(); setState(() => _rows.removeAt(i)); }
 
-  void _removeRow(int i) {
-    _rows[i].dispose();
-    setState(() => _rows.removeAt(i));
-  }
-
+  // ── Validation & Save ─────────────────────────────────────────────────────
   void _save() {
-    if (_buyerCtrl.text.trim().isEmpty) return;
-    final notifier = widget.outerRef.read(appDataProvider.notifier);
+    final buyer = _buyerCtrl.text.trim();
+    if (buyer.isEmpty) {
+      setState(() => _validationError = 'Buyer name is required.');
+      return;
+    }
+    if (_farmId.isEmpty) {
+      setState(() => _validationError = 'Please select a farm.');
+      return;
+    }
+    if (_date.isEmpty) {
+      setState(() => _validationError = 'Date is required.');
+      return;
+    }
+    if (_netAmount <= 0 && _grossAmount <= 0) {
+      setState(() => _validationError = 'Enter Qty × Rate in Stock Breakdown, or use Override Gross.');
+      return;
+    }
+    setState(() => _validationError = null);
+
+    final notifier = widget.outerRef.read(appDataProvider);
     final breakdown = _rows
-        .where((r) =>
-            (double.tryParse(r.qty.text) ?? 0) > 0 ||
-            (double.tryParse(r.rate.text) ?? 0) > 0)
+        .where((r) => (double.tryParse(r.qty.text) ?? 0) > 0 || (double.tryParse(r.rate.text) ?? 0) > 0)
         .map((r) => BreakdownItem(
               qty: (double.tryParse(r.qty.text) ?? 0).toInt(),
               rate: double.tryParse(r.rate.text) ?? 0,
-              sub: r.sub,
-            ))
+              sub: r.sub))
         .toList();
 
     final sale = Sale(
-      id: widget.existing?.id ?? notifier.newId('s'),
-      date: _date,
-      buyer: _buyerCtrl.text.trim(),
-      qty: _totalQty,
-      rate: breakdown.length == 1 ? breakdown.first.rate : 0,
-      amount: _netAmount,
+      id:        widget.existing?.id ?? notifier.newId('s'),
+      date:      _date,
+      buyer:     buyer,
+      qty:       _totalQty,
+      rate:      breakdown.length == 1 ? breakdown.first.rate : 0,
+      amount:    _netAmount,
       deduction: _deduction,
-      farmId: _farmId,
-      mandiId: _mandiId,
-      cropId: _cropId,
-      payMode: _payMode,
+      farmId:    _farmId,
+      mandiId:   _mandiId,
+      cropId:    _cropId,
+      payMode:   _payMode,
       breakdown: breakdown,
     );
     if (widget.existing != null) notifier.updateSale(sale);
@@ -163,274 +170,347 @@ class _State extends ConsumerState<_SaleFormDialog> {
     Navigator.pop(context);
   }
 
+  // ── Date picker ───────────────────────────────────────────────────────────
+  Future<void> _pickDate() async {
+    DateTime initial;
+    try { initial = DateTime.parse(_date); } catch (_) { initial = DateTime.now(); }
+    final first = DateTime(2020);
+    final last  = DateTime(2030, 12, 31);
+    final safe  = initial.isBefore(first) ? first : initial.isAfter(last) ? last : initial;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: safe,
+      firstDate: first,
+      lastDate: last,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(
+            primary: AppColors.greenMid, onPrimary: Colors.white),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _date = DateFormat('yyyy-MM-dd').format(picked));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final data = ref.watch(appDataProvider);
-    final farmMandis = data.mandis;           // all mandis (global)
-    final farmCrops = _farmId.isEmpty
+    final data       = ref.watch(appDataProvider);
+    final farmMandis = data.mandis;
+    final farmCrops  = _farmId.isEmpty
         ? data.crops
         : data.crops.where((c) => c.farmId == _farmId).toList();
+
+    // Display date formatted nicely
+    String displayDate = _date;
+    try {
+      displayDate = DateFormat('dd/MM/yyyy').format(DateTime.parse(_date));
+    } catch (_) {}
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       backgroundColor: AppColors.surface,
       child: SizedBox(
-        width: 560,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Title bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-              child: Row(children: [
-                Text(
-                  widget.existing != null ? 'Edit Sale Record' : 'Add Sale Record',
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary),
+        width: 580,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // ── Title ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+            child: Row(children: [
+              Text(
+                widget.existing != null ? 'Edit Sale Record' : 'Add Sale Record',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary, fontFamily: 'Sora'),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Body ──
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+                // Row 1: Date picker + Buyer with autocomplete
+                _TwoCol(
+                  left: _FieldBlock(label: 'DATE',
+                    child: InkWell(
+                      onTap: _pickDate,
+                      child: Container(
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface2,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: AppColors.border2, width: 1.5),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today_outlined,
+                              size: 15, color: AppColors.greenMid),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(displayDate,
+                              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora'))),
+                          const Icon(Icons.expand_more, size: 16, color: AppColors.textTertiary),
+                        ]),
+                      ),
+                    ),
+                  ),
+                  right: _FieldBlock(label: 'BUYER NAME',
+                    child: _BuyerField(
+                      controller: _buyerCtrl,
+                      suggestions: _buyerSuggestions,
+                      onChanged: (_) => setState(() => _validationError = null),
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 12),
+
+                // Row 2: Farm + Market
+                _TwoCol(
+                  left: _FieldBlock(label: 'FARM',
+                    child: _drop(
+                      value: _farmId.isEmpty ? null : _farmId,
+                      hint: '— Select farm —',
+                      items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
+                      onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }),
+                    ),
+                  ),
+                  right: _FieldBlock(label: 'MARKET',
+                    child: _drop(
+                      value: _mandiId.isEmpty ? null : _mandiId,
+                      hint: '— None —',
+                      items: farmMandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
+                      onChanged: (v) => setState(() => _mandiId = v ?? ''),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Row 3: Crop + Payment
+                _TwoCol(
+                  left: _FieldBlock(label: 'CROP',
+                    child: _drop(
+                      value: _cropId.isEmpty ? null : _cropId,
+                      hint: '— None —',
+                      items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                      onChanged: (v) => setState(() => _cropId = v ?? ''),
+                    ),
+                  ),
+                  right: _FieldBlock(label: 'PAYMENT MODE',
+                    child: _drop(
+                      value: _payMode,
+                      hint: 'Cash',
+                      items: ['Cash','Online','Other'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                      onChanged: (v) => setState(() => _payMode = v ?? 'Cash'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Stock breakdown header
+                Row(children: [
+                  const Text('STOCK BREAKDOWN (QTY × RATE)',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora')),
+                  const Spacer(),
+                  _AddRowBtn(onTap: _addRow),
+                ]),
+                const SizedBox(height: 8),
+
+                // Breakdown rows
+                ..._rows.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _BreakdownRow(
+                    row: entry.value,
+                    onRemove: _rows.length > 1 ? () => _removeRow(entry.key) : null,
+                    onChanged: () => setState(() {}),
+                  ),
+                )),
+                const SizedBox(height: 4),
+
+                // Gross amount band
+                _AmountBand(label: 'Gross Amount', amount: _grossAmount, isBold: true),
+                const SizedBox(height: 12),
+
+                // Override + Deduction
+                _TwoCol(
+                  left: _FieldBlock(label: 'OVERRIDE GROSS (OPTIONAL)',
+                    child: _numField(_overrideCtrl, 'Leave blank')),
+                  right: _FieldBlock(label: 'DEDUCTION (₹)',
+                    child: _numField(_deductCtrl, '0')),
+                ),
+                const SizedBox(height: 10),
+
+                // Net amount band
+                _AmountBand(label: 'Net Amount Received', amount: _netAmount, isBold: true),
+                const SizedBox(height: 16),
               ]),
             ),
-            const SizedBox(height: 18),
-            // ── Scrollable body
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Row 1: Date + Buyer
-                    _TwoCol(
-                      left: _FieldBlock(
-                        label: 'DATE',
-                        child: _dateField(),
-                      ),
-                      right: _FieldBlock(
-                        label: 'BUYER NAME',
-                        child: _textField(_buyerCtrl, 'e.g. Prakashbhai-91'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Row 2: Farm + Market
-                    _TwoCol(
-                      left: _FieldBlock(
-                        label: 'FARM',
-                        child: _drop(
-                          value: _farmId.isEmpty ? null : _farmId,
-                          hint: '— Select farm —',
-                          items: data.farms
-                              .map((f) => DropdownMenuItem(
-                                  value: f.id, child: Text(f.name)))
-                              .toList(),
-                          onChanged: (v) => setState(() {
-                            _farmId = v ?? '';
-                            _mandiId = '';
-                            _cropId = '';
-                          }),
-                        ),
-                      ),
-                      right: _FieldBlock(
-                        label: 'MARKET',
-                        child: _drop(
-                          value: _mandiId.isEmpty ? null : _mandiId,
-                          hint: '— None —',
-                          items: farmMandis
-                              .map((m) => DropdownMenuItem(
-                                  value: m.id, child: Text(m.name)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _mandiId = v ?? ''),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Row 3: Crop + Payment Mode
-                    _TwoCol(
-                      left: _FieldBlock(
-                        label: 'CROP',
-                        child: _drop(
-                          value: _cropId.isEmpty ? null : _cropId,
-                          hint: '— None —',
-                          items: farmCrops
-                              .map((c) => DropdownMenuItem(
-                                  value: c.id, child: Text(c.name)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _cropId = v ?? ''),
-                        ),
-                      ),
-                      right: _FieldBlock(
-                        label: 'PAYMENT MODE',
-                        child: _drop(
-                          value: _payMode,
-                          hint: 'Cash',
-                          items: ['Cash', 'Online', 'Other']
-                              .map((p) => DropdownMenuItem(
-                                  value: p, child: Text(p)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _payMode = v ?? 'Cash'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // ── Stock Breakdown header
-                    Row(children: [
-                      const Text('STOCK BREAKDOWN (QTY × RATE)',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary,
-                              letterSpacing: 0.05)),
-                      const Spacer(),
-                      _AddRowBtn(onTap: _addRow),
-                    ]),
-                    const SizedBox(height: 8),
-                    // ── Breakdown rows
-                    ..._rows.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final row = entry.value;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _BreakdownRow(
-                          row: row,
-                          onRemove: _rows.length > 1
-                              ? () => _removeRow(i)
-                              : null,
-                          onChanged: () => setState(() {}),
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 4),
-                    // ── Gross Amount display
-                    _AmountBand(
-                      label: 'Gross Amount',
-                      amount: _grossAmount,
-                      isBold: true,
-                    ),
-                    const SizedBox(height: 12),
-                    // Row 4: Override Gross + Deduction
-                    _TwoCol(
-                      left: _FieldBlock(
-                        label: 'OVERRIDE GROSS (OPTIONAL)',
-                        child: _textField(
-                            _overrideCtrl, 'Leave blank',
-                            keyboardType: TextInputType.number,
-                            onChanged: (_) => setState(() {})),
-                      ),
-                      right: _FieldBlock(
-                        label: 'DEDUCTION (₹)',
-                        child: _textField(
-                            _deductCtrl, '0',
-                            keyboardType: TextInputType.number,
-                            onChanged: (_) => setState(() {})),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // ── Net Amount Received
-                    _AmountBand(
-                      label: 'Net Amount Received',
-                      amount: _netAmount,
-                      isBold: true,
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ),
-            // ── Footer
+          ),
+
+          // ── Validation error ──
+          if (_validationError != null)
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-              decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: AppColors.border))),
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
+              margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.redPale,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: AppColors.red.withOpacity(0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.error_outline, size: 15, color: AppColors.red),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_validationError!,
+                    style: const TextStyle(fontSize: 12, color: AppColors.red, fontWeight: FontWeight.w500, fontFamily: 'Sora'))),
+              ]),
+            ),
+
+          // ── Footer ──
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.border))),
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Sora')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.greenMid,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    textStyle: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'Sora'),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(9)),
-                  ),
-                  onPressed: _save,
-                  child: const Text('Save'),
-                ),
-              ]),
-            ),
-          ],
-        ),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'Sora'),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9))),
+                onPressed: _save,
+                child: const Text('Save'),
+              ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
 
-  // ── Date field (shows date string, no picker required for parity with HTML)
-  Widget _dateField() {
-    final ctrl = TextEditingController(text: _date);
-    ctrl.selection =
-        TextSelection.fromPosition(TextPosition(offset: ctrl.text.length));
-    return TextField(
-      controller: ctrl,
-      style: _kInputStyle,
-      decoration: _kDec('YYYY-MM-DD'),
-      onChanged: (v) => _date = v,
+  Widget _numField(TextEditingController ctrl, String hint) => TextField(
+    controller: ctrl,
+    keyboardType: TextInputType.number,
+    style: _kInputStyle,
+    decoration: _kDec(hint),
+    onChanged: (_) => setState(() {}),
+  );
+
+  Widget _drop({required String? value, required String hint,
+      required List<DropdownMenuItem<String>> items, required ValueChanged<String?> onChanged}) =>
+    Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.border2, width: 1.5),
+      ),
+      child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+        value: value,
+        hint: Text(hint, style: _kHintStyle),
+        items: items,
+        onChanged: onChanged,
+        dropdownColor: AppColors.surface,
+        isExpanded: true,
+        isDense: true,
+        style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
+      )),
     );
+}
+
+// ── BUYER AUTOCOMPLETE FIELD ──────────────────────────────────────────────────
+class _BuyerField extends StatefulWidget {
+  final TextEditingController controller;
+  final List<String> suggestions;
+  final ValueChanged<String> onChanged;
+  const _BuyerField({required this.controller, required this.suggestions, required this.onChanged});
+  @override
+  State<_BuyerField> createState() => _BuyerFieldState();
+}
+
+class _BuyerFieldState extends State<_BuyerField> {
+  bool _showDropdown = false;
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() { if (!_focus.hasFocus) setState(() => _showDropdown = false); });
   }
 
-  Widget _textField(
-    TextEditingController ctrl,
-    String hint, {
-    TextInputType keyboardType = TextInputType.text,
-    ValueChanged<String>? onChanged,
-  }) =>
-      TextField(
-        controller: ctrl,
-        keyboardType: keyboardType,
-        style: _kInputStyle,
-        decoration: _kDec(hint),
-        onChanged: onChanged,
-      );
+  @override
+  void dispose() { _focus.dispose(); super.dispose(); }
 
-  Widget _drop({
-    required String? value,
-    required String hint,
-    required List<DropdownMenuItem<String>> items,
-    required ValueChanged<String?> onChanged,
-  }) =>
-      Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: AppColors.border2, width: 1.5),
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.suggestions.where((s) {
+      final q = widget.controller.text.trim().toLowerCase();
+      return q.isEmpty || s.toLowerCase().contains(q);
+    }).take(8).toList();
+
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(
+        controller: widget.controller,
+        focusNode: _focus,
+        style: _kInputStyle,
+        decoration: _kDec('e.g. Prakashbhai-91').copyWith(
+          suffixIcon: filtered.isNotEmpty
+              ? const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textTertiary)
+              : null,
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            hint: Text(hint, style: _kHintStyle),
-            items: items,
-            onChanged: onChanged,
-            dropdownColor: AppColors.surface,
-            isExpanded: true,
-            isDense: true,
-            style: _kInputStyle,
+        onChanged: (v) {
+          widget.onChanged(v);
+          setState(() => _showDropdown = v.isNotEmpty && filtered.isNotEmpty);
+        },
+        onTap: () => setState(() => _showDropdown = filtered.isNotEmpty),
+      ),
+      if (_showDropdown && filtered.isNotEmpty)
+        Container(
+          constraints: const BoxConstraints(maxHeight: 180),
+          margin: const EdgeInsets.only(top: 2),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: AppColors.border2, width: 1.5),
+            boxShadow: AppShadows.shadow,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: filtered.map((name) => InkWell(
+              onTap: () {
+                widget.controller.text = name;
+                widget.onChanged(name);
+                setState(() => _showDropdown = false);
+                _focus.unfocus();
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(children: [
+                  const Icon(Icons.person_outline, size: 14, color: AppColors.textTertiary),
+                  const SizedBox(width: 8),
+                  Text(name, style: _kInputStyle),
+                ]),
+              ),
+            )).toList(),
           ),
         ),
-      );
+    ]);
+  }
 }
 
 // ── BREAKDOWN ROW WIDGET ──────────────────────────────────────────────────────
@@ -438,83 +518,47 @@ class _BreakdownRow extends StatelessWidget {
   final _BdRow row;
   final VoidCallback? onRemove;
   final VoidCallback onChanged;
-
-  const _BreakdownRow(
-      {required this.row, required this.onRemove, required this.onChanged});
+  const _BreakdownRow({required this.row, required this.onRemove, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final sub = row.sub;
-    final subLabel = sub > 0
-        ? '= ₹${sub.toStringAsFixed(0)}'
-        : '= —';
-
     return Row(children: [
-      // Qty
-      Expanded(
-        flex: 5,
-        child: TextField(
-          controller: row.qty,
-          keyboardType: TextInputType.number,
-          style: _kInputStyle,
-          decoration: _kDec('Qty (kg)'),
-          onChanged: (_) => onChanged(),
-        ),
+      Expanded(flex: 5, child: TextField(
+        controller: row.qty,
+        keyboardType: TextInputType.number,
+        style: _kInputStyle,
+        decoration: _kDec('Qty (kg)'),
+        onChanged: (_) => onChanged(),
+      )),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: Text('×', style: TextStyle(fontSize: 16, color: AppColors.textTertiary, fontFamily: 'Sora')),
       ),
-      Padding(
+      Expanded(flex: 5, child: TextField(
+        controller: row.rate,
+        keyboardType: TextInputType.number,
+        style: _kInputStyle,
+        decoration: _kDec('Rate (₹)'),
+        onChanged: (_) => onChanged(),
+      )),
+      SizedBox(width: 82, child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Text('×',
-            style: TextStyle(
-                fontSize: 16,
-                color: AppColors.textTertiary,
-                fontWeight: FontWeight.w500)),
-      ),
-      // Rate
-      Expanded(
-        flex: 5,
-        child: TextField(
-          controller: row.rate,
-          keyboardType: TextInputType.number,
-          style: _kInputStyle,
-          decoration: _kDec('Rate (₹)'),
-          onChanged: (_) => onChanged(),
-        ),
-      ),
-      // Sub-total label
-      SizedBox(
-        width: 80,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(subLabel,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontFamily: 'Sora')),
-        ),
-      ),
-      // Remove button
+        child: Text(sub > 0 ? '= ₹${sub.toStringAsFixed(0)}' : '= —',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Sora')),
+      )),
       GestureDetector(
         onTap: onRemove,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 28,
-          height: 28,
+          width: 28, height: 28,
           decoration: BoxDecoration(
-            color: onRemove != null
-                ? AppColors.redPale
-                : AppColors.surface2,
+            color: onRemove != null ? AppColors.redPale : AppColors.surface2,
             borderRadius: BorderRadius.circular(7),
-            border: Border.all(
-              color: onRemove != null
-                  ? AppColors.red.withOpacity(0.25)
-                  : AppColors.border,
-            ),
+            border: Border.all(color: onRemove != null ? AppColors.red.withOpacity(0.25) : AppColors.border),
           ),
-          child: Icon(Icons.close,
-              size: 14,
-              color: onRemove != null
-                  ? AppColors.red
-                  : AppColors.textTertiary),
+          child: Icon(Icons.close, size: 14,
+              color: onRemove != null ? AppColors.red : AppColors.textTertiary),
         ),
       ),
     ]);
@@ -526,112 +570,77 @@ class _AmountBand extends StatelessWidget {
   final String label;
   final double amount;
   final bool isBold;
-
-  const _AmountBand(
-      {required this.label, required this.amount, this.isBold = false});
+  const _AmountBand({required this.label, required this.amount, this.isBold = false});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.greenPale,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: AppColors.greenMuted.withOpacity(0.3)),
-      ),
-      child: Row(children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-                color: AppColors.greenMid)),
-        const Spacer(),
-        Text(
-          '₹${amount.toStringAsFixed(0)}',
-          style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.greenMid,
-              fontFamily: 'Sora'),
-        ),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: AppColors.greenPale,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: AppColors.greenMuted.withOpacity(0.3)),
+    ),
+    child: Row(children: [
+      Text(label, style: TextStyle(
+          fontSize: 13, fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+          color: AppColors.greenMid, fontFamily: 'Sora')),
+      const Spacer(),
+      Text('₹${amount.toStringAsFixed(0)}', style: const TextStyle(
+          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.greenMid, fontFamily: 'Sora')),
+    ]),
+  );
 }
 
-// ── + ADD ROW BUTTON ──────────────────────────────────────────────────────────
+// ── ADD ROW BUTTON ────────────────────────────────────────────────────────────
 class _AddRowBtn extends StatelessWidget {
   final VoidCallback onTap;
   const _AddRowBtn({required this.onTap});
-
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.greenPale,
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: AppColors.greenMuted.withOpacity(0.4)),
-        ),
-        child: const Text('+ Add Row',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.greenMid,
-                fontFamily: 'Sora')),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.greenPale,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.greenMuted.withOpacity(0.4)),
       ),
-    );
-  }
+      child: const Text('+ Add Row', style: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.greenMid, fontFamily: 'Sora')),
+    ),
+  );
 }
 
-// ── TWO-COL LAYOUT ────────────────────────────────────────────────────────────
+// ── LAYOUT HELPERS ────────────────────────────────────────────────────────────
 class _TwoCol extends StatelessWidget {
-  final Widget left;
-  final Widget right;
+  final Widget left, right;
   const _TwoCol({required this.left, required this.right});
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        const SizedBox(width: 12),
-        Expanded(child: right),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [Expanded(child: left), const SizedBox(width: 12), Expanded(child: right)],
+  );
 }
 
-// ── FIELD BLOCK ────────────────────────────────────────────────────────────────
 class _FieldBlock extends StatelessWidget {
   final String label;
   final Widget child;
   const _FieldBlock({required this.label, required this.child});
-
   @override
-  Widget build(BuildContext context) {
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.04)),
-          const SizedBox(height: 5),
-          child,
-        ]);
-  }
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary, letterSpacing: 0.04, fontFamily: 'Sora')),
+      const SizedBox(height: 5),
+      child,
+    ],
+  );
 }
 
-// ── MANDI FORM (quick add from dashboard / farms screen) ──────────────────────
+// ── MANDI QUICK-ADD (used from dashboard/farms) ───────────────────────────────
 Future<void> showMandiFormDialog(BuildContext context, WidgetRef ref,
     [String? defaultFarmId]) async {
   final data = ref.read(appDataProvider);
@@ -640,112 +649,67 @@ Future<void> showMandiFormDialog(BuildContext context, WidgetRef ref,
         const SnackBar(content: Text('Please add a farm first')));
     return;
   }
-
   final nameCtrl = TextEditingController();
-  final locCtrl = TextEditingController();
-  String farmId = defaultFarmId ?? data.farms.first.id;
+  final locCtrl  = TextEditingController();
+  String farmId  = defaultFarmId ?? data.farms.first.id;
 
   await showDialog(
     context: context,
-    builder: (ctx) =>
-        StatefulBuilder(builder: (ctx, setState) => Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18)),
-          backgroundColor: AppColors.surface,
-          child: SizedBox(
-            width: 420,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Add Market',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 18),
-                      _FieldBlock(
-                          label: 'MARKET NAME',
-                          child: TextField(
-                              controller: nameCtrl,
-                              style: _kInputStyle,
-                              decoration:
-                                  _kDec('Enter market name'))),
-                      const SizedBox(height: 12),
-                      _FieldBlock(
-                          label: 'LOCATION',
-                          child: TextField(
-                              controller: locCtrl,
-                              style: _kInputStyle,
-                              decoration:
-                                  _kDec('Enter location (optional)'))),
-                      const SizedBox(height: 20),
-                    ]),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-                decoration: const BoxDecoration(
-                    border: Border(
-                        top: BorderSide(color: AppColors.border))),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.greenMid,
-                            foregroundColor: Colors.white),
-                        onPressed: () {
-                          if (nameCtrl.text.trim().isEmpty) return;
-                          ref
-                              .read(appDataProvider.notifier)
-                              .addMandi(Mandi(
-                                id: ref
-                                    .read(appDataProvider.notifier)
-                                    .newId('m'),
-                                farmId: farmId,
-                                name: nameCtrl.text.trim(),
-                                location: locCtrl.text.trim(),
-                              ));
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ]),
-              ),
-            ]),
-          ),
-        )),
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: AppColors.surface,
+      child: SizedBox(width: 420, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Add Market', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary, fontFamily: 'Sora')),
+            const SizedBox(height: 18),
+            _FieldBlock(label: 'MARKET NAME',
+                child: TextField(controller: nameCtrl, style: _kInputStyle, decoration: _kDec('Enter market name'))),
+            const SizedBox(height: 12),
+            _FieldBlock(label: 'LOCATION',
+                child: TextField(controller: locCtrl, style: _kInputStyle, decoration: _kDec('Enter location (optional)'))),
+            const SizedBox(height: 20),
+          ]),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(fontFamily: 'Sora'))),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.greenMid, foregroundColor: Colors.white),
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                final n = ref.read(appDataProvider);
+                n.addMandi(Mandi(id: n.newId('m'), farmId: farmId,
+                    name: nameCtrl.text.trim(), location: locCtrl.text.trim()));
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save', style: TextStyle(fontFamily: 'Sora')),
+            ),
+          ]),
+        ),
+      ])),
+    )),
   );
 }
 
 // ── SHARED STYLE HELPERS ──────────────────────────────────────────────────────
-const _kInputStyle =
-    TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora');
-const _kHintStyle =
-    TextStyle(fontSize: 13, color: AppColors.textTertiary, fontFamily: 'Sora');
+const _kInputStyle = TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora');
+const _kHintStyle  = TextStyle(fontSize: 13, color: AppColors.textTertiary, fontFamily: 'Sora');
 
 InputDecoration _kDec(String hint) => InputDecoration(
-      hintText: hint,
-      hintStyle: _kHintStyle,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide:
-              const BorderSide(color: AppColors.greenLight, width: 1.5)),
-      filled: true,
-      fillColor: AppColors.surface2,
-    );
+  hintText: hint,
+  hintStyle: _kHintStyle,
+  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+  border: OutlineInputBorder(borderRadius: BorderRadius.circular(9),
+      borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
+  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9),
+      borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
+  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9),
+      borderSide: const BorderSide(color: AppColors.greenMid, width: 1.5)),
+  filled: true,
+  fillColor: AppColors.surface2,
+);

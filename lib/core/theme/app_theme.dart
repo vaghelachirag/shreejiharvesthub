@@ -24,8 +24,8 @@ class AppColors {
   static const surface2 = Color(0xFFEFF3E8);
 
   // Borders
-  static const border = Color(0x213C6414);
-  static const border2 = Color(0x383C6414);
+  static const border = Color(0x213C6414);    // rgba(60,100,20,0.13)
+  static const border2 = Color(0x383C6414);   // rgba(60,100,20,0.22)
 
   // Text
   static const textPrimary = Color(0xFF1A2D0A);
@@ -35,6 +35,19 @@ class AppColors {
   // Splash gradient
   static const splashStart = Color(0xFF1A3A06);
   static const splashEnd = Color(0xFF3B6D11);
+
+  // Categories (Expenses)
+  static const catLabour = Color(0xFF6366F1);
+  static const catTransport = Color(0xFFF59E0B);
+  static const catSupplies = Color(0xFF10B981);
+  static const catFertilizer = Color(0xFF8B5CF6);
+  static const catLoan = Color(0xFFEF4444);
+  static const catMisc = Color(0xFF6B7280);
+
+  // Payment Modes
+  static const payCash = Color(0xFF10B981);
+  static const payOnline = Color(0xFF3B82F6);
+  static const payOther = Color(0xFF6B7280);
 }
 
 // ── SHADOW HELPERS ────────────────────────────────────────────────────────────
@@ -57,6 +70,25 @@ class AppRadius {
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
 class AppTheme {
+  static Color getCategoryColor(String category) {
+    switch (category) {
+      case 'Labour': return AppColors.catLabour;
+      case 'Transport': return AppColors.catTransport;
+      case 'Supplies': return AppColors.catSupplies;
+      case 'Fertilizer': return AppColors.catFertilizer;
+      case 'Loan': return AppColors.catLoan;
+      default: return AppColors.catMisc;
+    }
+  }
+
+  static Color getPayModeColor(String mode) {
+    switch (mode) {
+      case 'Cash': return AppColors.payCash;
+      case 'Online': return AppColors.payOnline;
+      default: return AppColors.payOther;
+    }
+  }
+
   static ThemeData get theme {
     final base = ThemeData(
       useMaterial3: true,
@@ -88,13 +120,13 @@ class AppTheme {
 
     return base.copyWith(
       textTheme: sora,
-      appBarTheme: AppBarTheme(
+      appBarTheme: AppBarThemeData(
         backgroundColor: AppColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: sora.titleLarge,
       ),
-    /*  cardTheme: const CardTheme(
+      cardTheme: const CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -102,8 +134,8 @@ class AppTheme {
           side: BorderSide(color: AppColors.border, width: 1),
         ),
         margin: EdgeInsets.zero,
-      ),*/
-      inputDecorationTheme: InputDecorationTheme(
+      ),
+      inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: AppColors.surface2,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -141,14 +173,14 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
-     /* dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: const BorderSide(color: AppColors.border),
         ),
         elevation: 8,
-      ),*/
+      ),
     );
   }
 }

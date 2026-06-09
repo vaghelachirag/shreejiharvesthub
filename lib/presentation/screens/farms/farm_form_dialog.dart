@@ -42,7 +42,7 @@ class _State extends ConsumerState<_FarmFormDialog> {
 
   void _save() {
     if (_nameCtrl.text.trim().isEmpty) return;
-    final notifier = ref.read(appDataProvider.notifier);
+    final notifier = ref.read(appDataProvider);
     final farm = Farm(
       id: widget.existing?.id ?? notifier.newId('f'),
       name: _nameCtrl.text.trim(),
@@ -71,9 +71,10 @@ class _State extends ConsumerState<_FarmFormDialog> {
                 border: Border.all(color: AppColors.border2, width: 1.5)),
             child: DropdownButtonHideUnderline(child: DropdownButton<String>(
               value: _type,
-              items: AppConstants.farmTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: _s))).toList(),
+              items: AppConstants.farmTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: _s.copyWith(fontWeight: FontWeight.w700)))).toList(),
               onChanged: (v) => setState(() => _type = v ?? _type),
               dropdownColor: AppColors.surface, isExpanded: true, isDense: true,
+              style: _s.copyWith(fontWeight: FontWeight.w700),
             )),
           ))),
           const SizedBox(width: 10),

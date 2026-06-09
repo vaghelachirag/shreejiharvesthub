@@ -15,7 +15,7 @@ class DashboardScreen extends ConsumerWidget {
     final filter = ref.watch(dateFilterProvider);
     final dashFilter = ref.watch(dashboardFilterProvider);
     final data = ref.watch(appDataProvider);
-    final notifier = ref.read(appDataProvider.notifier);
+    final notifier = ref.read(appDataProvider);
 
     final sales = notifier.filteredSales(filter.range, filter.activeDate,
         farmId: dashFilter.farmId,
@@ -31,77 +31,90 @@ class DashboardScreen extends ConsumerWidget {
     final netProfit = totalSales - totalExp;
     final totalQty = sales.fold<double>(0, (s, r) => s + r.qty);
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Dashboard Filter Bar ──
-          _DashboardFilterBar(),
-          const SizedBox(height: 12),
-          // ── Metrics Row — fixed-height equal cards matching Image 2 ──
-          IntrinsicHeight(
-            child: Row(
-              children: [
-                Expanded(child: MetricCard(
-                  label: 'Total Sales',
-                  value: AppUtils.formatCurrency(totalSales),
-                  sub: '${sales.length} transactions',
-                  accent: MetricAccent.green,
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: MetricCard(
-                  label: 'Total Expenses',
-                  value: AppUtils.formatCurrency(totalExp),
-                  sub: '${expenses.length} entries',
-                  accent: MetricAccent.red,
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: MetricCard(
-                  label: 'Net Profit',
-                  value: AppUtils.formatCurrency(netProfit),
-                  sub: netProfit >= 0 ? 'Surplus' : 'Deficit',
-                  accent: netProfit >= 0 ? MetricAccent.blue : MetricAccent.amber,
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: MetricCard(
-                  label: 'Production',
-                  value: '${AppUtils.formatNumber(totalQty)} kg',
-                  sub: 'Total dispatched',
-                  accent: MetricAccent.amber,
-                )),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // ── Expense Breakdown + Farm Summary ──
-          IntrinsicHeight(
-            child: Row(
+    final t = Theme.of(context).textTheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _ExpenseBreakdownCard(expenses: expenses)),
-                const SizedBox(width: 12),
-                Expanded(child: _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // ── Recent Activity ──
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CardTitle(
-                  title: 'Recent Activity',
-                  trailing: _PdfButton(onTap: () {}),
+                // ── Dashboard Filter Bar ──
+                _DashboardFilterBar(),
+                const SizedBox(height: 16),
+
+                // ── Metrics Row ──
+                IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Expanded(child: MetricCard(
+                        label: 'Total Sales',
+                        value: AppUtils.formatCurrency(totalSales),
+                        sub: '${sales.length} transactions',
+                        accent: MetricAccent.green,
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: MetricCard(
+                        label: 'Total Expenses',
+                        value: AppUtils.formatCurrency(totalExp),
+                        sub: '${expenses.length} entries',
+                        accent: MetricAccent.red,
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: MetricCard(
+                        label: 'Net Profit',
+                        value: AppUtils.formatCurrency(netProfit),
+                        sub: netProfit >= 0 ? 'Surplus' : 'Deficit',
+                        accent: netProfit >= 0 ? MetricAccent.blue : MetricAccent.amber,
+                      )),
+                      const SizedBox(width: 12),
+                      Expanded(child: MetricCard(
+                        label: 'Production',
+                        value: '${AppUtils.formatNumber(totalQty)} kg',
+                        sub: 'Total dispatched',
+                        accent: MetricAccent.amber,
+                      )),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _RecentActivityTable(sales: sales, expenses: expenses, data: data),
+                const SizedBox(height: 16),
+
+                // ── Expense Breakdown + Farm Summary ──
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _ExpenseBreakdownCard(expenses: expenses)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Recent Activity ──
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      CardTitle(
+                        title: 'Recent Activity',
+                        trailing: _PdfButton(onTap: () {}),
+                      ),
+                      const SizedBox(height: 16),
+                      _RecentActivityTable(sales: sales, expenses: expenses, farms: data.farms, mandis: data.mandis, crops: data.crops),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -127,10 +140,10 @@ class _ExpenseBreakdownCard extends StatelessWidget {
 
     return AppCard(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CardTitle(title: 'Expense Breakdown'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (sorted.isEmpty)
             const EmptyState(icon: '📊', title: 'No expenses for this period')
           else
@@ -156,8 +169,6 @@ class _FarmSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
     final Map<String, double> farmSales = {};
     final Map<String, double> farmExp = {};
     for (final s in sales) farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
@@ -168,10 +179,10 @@ class _FarmSummaryCard extends StatelessWidget {
 
     return AppCard(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const CardTitle(title: 'Farm-wise Summary'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (farms.isEmpty)
             const EmptyState(icon: '🌾', title: 'No data for this period')
           else ...[
@@ -180,55 +191,64 @@ class _FarmSummaryCard extends StatelessWidget {
               final fe = farmExp[f.id] ?? 0;
               final profit = fs - fe;
               return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
                       Expanded(
                         child: Text(f.name,
-                            style: t.bodySmall?.copyWith(
+                            style: const TextStyle(
+                                fontSize: 13,
                                 color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'Sora')),
                       ),
                       Text(
                         profit >= 0 ? '▲ ${AppUtils.formatCurrency(profit)}' : '▼ ${AppUtils.formatCurrency(profit.abs())}',
                         style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Sora',
                             color: profit >= 0 ? AppColors.greenMid : AppColors.red),
                       ),
                     ]),
                     const SizedBox(height: 4),
                     Row(children: [
                       Text('Sales: ${AppUtils.formatCurrency(fs)}',
-                          style: t.labelSmall?.copyWith(color: AppColors.textTertiary)),
-                      const SizedBox(width: 10),
+                          style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'Sora')),
+                      const SizedBox(width: 12),
                       Text('Exp: ${AppUtils.formatCurrency(fe)}',
-                          style: t.labelSmall?.copyWith(color: AppColors.textTertiary)),
+                          style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'Sora')),
                     ]),
-                    const SizedBox(height: 4),
-                    Container(height: 1, color: AppColors.border),
+                    const SizedBox(height: 8),
+                    Container(height: 1, color: AppColors.border.withOpacity(0.5)),
                   ],
                 ),
               );
             }),
-            const SizedBox(height: 4),
-            Row(children: [
-              const Expanded(
-                  child: Text('TOTAL',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary))),
-              Text(AppUtils.formatCurrency(totalSales - totalExp),
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: (totalSales - totalExp) >= 0
-                          ? AppColors.greenMid
-                          : AppColors.red)),
-            ]),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [
+                const Expanded(
+                    child: Text('TOTAL NET',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Sora',
+                            color: AppColors.textSecondary,
+                            letterSpacing: 0.5))),
+                Text(AppUtils.formatCurrency(totalSales - totalExp),
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Sora',
+                        color: (totalSales - totalExp) >= 0
+                            ? AppColors.greenMid
+                            : AppColors.red)),
+              ]),
+            ),
           ],
         ],
       ),
@@ -253,24 +273,32 @@ class _DashboardFilterBar extends ConsumerWidget {
         : data.crops.where((c) => c.farmId == dashFilter.farmId).toList();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.radiusLg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.shadow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           // ── Farm
-          const Icon(Icons.eco_rounded, size: 14, color: AppColors.greenMid),
-          const SizedBox(width: 5),
+          const Icon(Icons.eco_rounded, size: 16, color: AppColors.greenMid),
+          const SizedBox(width: 8),
           const Text('FARM',
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const SizedBox(width: 8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora',
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.05)),
+          const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.farmId.isEmpty ? '' : dashFilter.farmId,
             items: [
@@ -283,18 +311,20 @@ class _DashboardFilterBar extends ConsumerWidget {
                     dashFilter.copyWith(
                         farmId: v ?? '', mandiId: '', cropId: ''),
           ),
-          const SizedBox(width: 14),
-          Container(width: 1, height: 22, color: AppColors.border2),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
+          Container(width: 1, height: 24, color: AppColors.border2),
+          const SizedBox(width: 16),
           // ── Mandi
-          const Icon(Icons.store_outlined, size: 14, color: AppColors.greenMid),
-          const SizedBox(width: 5),
-          const Text('MANDI',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
+          const Icon(Icons.storefront_rounded, size: 16, color: AppColors.greenMid),
           const SizedBox(width: 8),
+          const Text('MARKET',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora',
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.05)),
+          const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.mandiId.isEmpty ? '' : dashFilter.mandiId,
             items: [
@@ -306,18 +336,20 @@ class _DashboardFilterBar extends ConsumerWidget {
                 ref.read(dashboardFilterProvider.notifier).state =
                     dashFilter.copyWith(mandiId: v ?? ''),
           ),
-          const SizedBox(width: 14),
-          Container(width: 1, height: 22, color: AppColors.border2),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
+          Container(width: 1, height: 24, color: AppColors.border2),
+          const SizedBox(width: 16),
           // ── Crop
-          const Icon(Icons.grass_outlined, size: 14, color: AppColors.greenMid),
-          const SizedBox(width: 5),
+          const Icon(Icons.grass_rounded, size: 16, color: AppColors.greenMid),
+          const SizedBox(width: 8),
           const Text('CROP',
               style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const SizedBox(width: 8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora',
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.05)),
+          const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.cropId.isEmpty ? '' : dashFilter.cropId,
             items: [
@@ -345,12 +377,12 @@ class _FilterDrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 32,
+      height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border2, width: 1.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border2, width: 1),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -359,11 +391,12 @@ class _FilterDrop extends StatelessWidget {
           onChanged: onChanged,
           style: const TextStyle(
               fontSize: 12,
+              fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
               fontFamily: 'Sora'),
           dropdownColor: AppColors.surface,
           isDense: true,
-          iconSize: 18,
+          iconSize: 20,
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
               color: AppColors.textSecondary),
         ),
@@ -376,25 +409,27 @@ class _FilterDrop extends StatelessWidget {
 class _RecentActivityTable extends StatelessWidget {
   final List<Sale> sales;
   final List<Expense> expenses;
-  final AppDataState data;
+  final List<Farm> farms;
+  final List<Mandi> mandis;
+  final List<Crop> crops;
 
   const _RecentActivityTable({
     required this.sales,
     required this.expenses,
-    required this.data,
+    required this.farms,
+    required this.mandis,
+    required this.crops,
   });
 
   String _farmName(String id) =>
-      data.farms.firstWhere((f) => f.id == id, orElse: () => Farm(id: '', name: '—')).name;
+      AppUtils.farmName(farms, id);
   String _mandiName(String id) =>
-      data.mandis.firstWhere((m) => m.id == id, orElse: () => Mandi(id: '', farmId: '', name: '—')).name;
+      AppUtils.mandiName(mandis, id);
   String _cropName(String id) =>
-      data.crops.firstWhere((c) => c.id == id, orElse: () => Crop(id: '', farmId: '', name: '—')).name;
+      AppUtils.cropName(crops, id);
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
     final combined = [
       ...sales.map((s) => _ActivityRow(
             date: s.date, description: s.buyer, farmId: s.farmId,
@@ -412,51 +447,60 @@ class _RecentActivityTable extends StatelessWidget {
       return const EmptyState(icon: '📋', title: 'No activity for this period');
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowHeight: 36,
-        dataRowMinHeight: 42,
-        dataRowMaxHeight: 52,
-        columnSpacing: 16,
-        horizontalMargin: 4,
-        headingRowColor: WidgetStateProperty.all(Colors.transparent),
-        columns: const [
-          DataColumn(label: _TH('Date')),
-          DataColumn(label: _TH('Buyer / Description')),
-          DataColumn(label: _TH('Farm')),
-          DataColumn(label: _TH('Market')),
-          DataColumn(label: _TH('Crop')),
-          DataColumn(label: _TH('Qty (kg)'), numeric: true),
-          DataColumn(label: _TH('Amount (₹)'), numeric: true),
-          DataColumn(label: _TH('Type')),
-        ],
-        rows: combined.map((row) => DataRow(
-          color: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.hovered)) return AppColors.greenPale;
-            return null;
-          }),
-          cells: [
-            DataCell(Text(AppUtils.formatDate(row.date), style: t.bodySmall)),
-            DataCell(Text(row.description, style: t.bodySmall)),
-            DataCell(Text(_farmName(row.farmId), style: t.bodySmall)),
-            DataCell(Text(_mandiName(row.mandiId), style: t.bodySmall)),
-            DataCell(Text(_cropName(row.cropId), style: t.bodySmall)),
-            DataCell(Text(row.qty > 0 ? AppUtils.formatNumber(row.qty) : '—',
-                style: t.bodySmall?.copyWith(fontFamily: 'monospace'))),
-            DataCell(Text(
-              (row.isSale ? '' : '-') + AppUtils.formatCurrency(row.amount),
-              style: t.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: row.isSale ? AppColors.greenMid : AppColors.red),
-            )),
-            DataCell(AppBadge(
-              label: row.isSale ? 'Sale' : 'Expense',
-              variant: row.isSale ? BadgeVariant.green : BadgeVariant.amber,
-            )),
-          ],
-        )).toList(),
-      ),
+    const cellStyle = TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Sora');
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              headingRowHeight: 40,
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 56,
+              columnSpacing: 24,
+              horizontalMargin: 8,
+              headingRowColor: WidgetStateProperty.all(Colors.transparent),
+              columns: const [
+                DataColumn(label: _TH('Date')),
+                DataColumn(label: _TH('Description')),
+                DataColumn(label: _TH('Farm')),
+                DataColumn(label: _TH('Market')),
+                DataColumn(label: _TH('Crop')),
+                DataColumn(label: _TH('Qty (kg)'), numeric: true),
+                DataColumn(label: _TH('Amount (₹)'), numeric: true),
+                DataColumn(label: _TH('Type')),
+              ],
+              rows: combined.map((row) => DataRow(
+                color: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.hovered)) return AppColors.greenPale;
+                  return null;
+                }),
+                cells: [
+                  DataCell(Text(AppUtils.formatDate(row.date), style: cellStyle)),
+                  DataCell(Text(row.description, style: cellStyle.copyWith(fontWeight: FontWeight.w500))),
+                  DataCell(Text(_farmName(row.farmId), style: cellStyle)),
+                  DataCell(Text(_mandiName(row.mandiId), style: cellStyle)),
+                  DataCell(Text(_cropName(row.cropId), style: cellStyle)),
+                  DataCell(Text(row.qty > 0 ? AppUtils.formatNumber(row.qty) : '—',
+                      style: cellStyle.copyWith(fontFamily: 'monospace'))),
+                  DataCell(Text(
+                    (row.isSale ? '' : '-') + AppUtils.formatCurrency(row.amount),
+                    style: cellStyle.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: row.isSale ? AppColors.greenMid : AppColors.red),
+                  )),
+                  DataCell(AppBadge(
+                    label: row.isSale ? 'Sale' : 'Expense',
+                    variant: row.isSale ? BadgeVariant.green : BadgeVariant.amber,
+                  )),
+                ],
+              )).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -480,10 +524,11 @@ class _TH extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(text.toUpperCase(),
         style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-            letterSpacing: 0.04));
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Sora',
+            color: AppColors.textTertiary,
+            letterSpacing: 0.08));
   }
 }
 
@@ -502,11 +547,20 @@ class _PdfButton extends StatelessWidget {
           color: AppColors.blue,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text('⬇ PDF Report',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white)),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.picture_as_pdf_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 8),
+            Text('PDF REPORT',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Sora',
+                    color: Colors.white,
+                    letterSpacing: 0.5)),
+          ],
+        ),
       ),
     );
   }

@@ -2,9 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/models.dart';
 
-/// Central service — FirebaseAuth + Firestore.
-/// Admin-created accounts only; no self-registration.
-/// All data scoped under: users/{uid}/{collection}/{docId}
+/// Central Firebase service. Admin-created accounts only.
+/// Data scoped under: users/{uid}/{collection}/{docId}
 class FirebaseService {
   FirebaseService._();
   static final instance = FirebaseService._();
@@ -29,20 +28,23 @@ class FirebaseService {
   DocumentReference<Map<String, dynamic>> _doc(String col, String id) =>
       _col(col).doc(id);
 
-  // ── HELPER: safe Map<String,dynamic> merge ────────────────────────────────
-  // Spread operator in release mode can produce Map<dynamic,dynamic>.
-  // Explicitly cast to avoid the minified type-cast crash.
+  // ── SAFE MAP MERGE ────────────────────────────────────────────────────────
+  // Spread {...d.data(), 'id': d.id} produces Map<dynamic,dynamic> in
+  // dart2js release builds, causing fromJson cast failures.
+  // This explicit method preserves Map<String,dynamic> at all opt levels.
   static Map<String, dynamic> _merge(Map<String, dynamic> data, String id) {
-    final result = <String, dynamic>{'id': id};
-    result.addAll(data);
-    return result;
+    final out = <String, dynamic>{'id': id};
+    out.addAll(data);
+    return out;
   }
 
   // ── SETTINGS ──────────────────────────────────────────────────────────────
   Future<List<String>> fetchCategories() async {
     final snap = await _doc('settings', 'categories').get();
-    if (!snap.exists) return [];
-    return List<String>.from(snap.data()!['list'] as List? ?? []);
+    if (!snap.exists) return <String>[];
+    final raw = snap.data()!['list'];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    return <String>[];
   }
 
   Future<void> saveCategories(List<String> cats) =>
@@ -63,7 +65,7 @@ class FirebaseService {
       _doc('farms', farm.id).update(farm.toJson()..remove('id'));
 
   Future<void> deleteFarm(String id) async {
-    final batch = _db.batch();
+    final batch  = _db.batch();
     batch.delete(_doc('farms', id));
     final mandis = await _col('mandis').where('farmId', isEqualTo: id).get();
     for (final d in mandis.docs) batch.delete(d.reference);

@@ -116,7 +116,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       ),
                       const SizedBox(height: 20),
                       // Title
-                      const Text('FarmTrack Pro',
+                      const Text('Shreeji Harvest Hub',
                           style: TextStyle(
                               fontFamily: 'Sora',
                               fontSize: 36,
@@ -124,7 +124,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               color: Colors.white,
                               letterSpacing: -0.5)),
                       const SizedBox(height: 6),
-                      Text('Smart Farm Expense Management',
+                      Text('Shreeji Harvest Hub',
                           style: TextStyle(
                               fontFamily: 'Sora',
                               fontSize: 14,
@@ -147,7 +147,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text('Grow smarter · Track better',
+                      Text('Harvest smarter · Track better',
                           style: TextStyle(
                               fontFamily: 'Sora',
                               fontSize: 11,

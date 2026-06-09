@@ -55,12 +55,11 @@ class _State extends ConsumerState<CropsScreen> {
                     itemCount: crops.length,
                     itemBuilder: (_, i) => _CropCard(
                       crop: crops[i],
-                      farmName: data.farms.firstWhere((f) => f.id == crops[i].farmId,
-                          orElse: () => Farm(id: '', name: '—')).name,
+                      farmName: AppUtils.farmName(data.farms, crops[i].farmId),
                       onEdit: () => _showCropForm(context, crops[i]),
                       onDelete: () async {
                         final ok = await showConfirmDialog(context, message: 'Delete crop "${crops[i].name}"?');
-                        if (ok) ref.read(appDataProvider.notifier).deleteCrop(crops[i].id);
+                        if (ok) ref.read(appDataProvider).deleteCrop(crops[i].id);
                       },
                     ),
                   );
@@ -113,7 +112,7 @@ class _State extends ConsumerState<CropsScreen> {
               const SizedBox(width: 8),
               ElevatedButton(onPressed: () {
                 if (nameCtrl.text.trim().isEmpty || farmId.isEmpty) return;
-                final notifier = ref.read(appDataProvider.notifier);
+                final notifier = ref.read(appDataProvider);
                 final crop = Crop(
                   id: existing?.id ?? notifier.newId('c'),
                   farmId: farmId, name: nameCtrl.text.trim(),

@@ -13,16 +13,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     redirect: (context, state) {
       final isLoggedIn = authState.isLoggedIn;
-      final isSplash = state.matchedLocation == '/splash';
-      final isLogin = state.matchedLocation == '/login';
+      final isSplash   = state.matchedLocation == '/splash';
+      final isLogin    = state.matchedLocation == '/login';
+
       if (isSplash) return null;
       if (!isLoggedIn && !isLogin) return '/login';
-      if (isLoggedIn && isLogin) return '/app/dashboard';
+      if (isLoggedIn && isLogin)   return '/app/dashboard';
       return null;
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/login',  builder: (_, __) => const LoginScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
@@ -40,5 +41,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 class _Stub extends StatelessWidget {
   const _Stub();
-  @override Widget build(BuildContext context) => const SizedBox.shrink();
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

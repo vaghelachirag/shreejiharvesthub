@@ -13,29 +13,55 @@ class FarmsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appDataProvider);
+    final t = Theme.of(context).textTheme;
 
     return AppCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Header Section ───────────────────────────────────────────────────
         Row(children: [
-          const Text('FARMS & MARKETS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary, letterSpacing: 0.08)),
+          const Icon(Icons.agriculture_rounded, color: AppColors.greenMid, size: 28),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Farm Management',
+                style: t.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    fontFamily: 'Sora')),
+            Text('Register and organize your cultivation areas',
+                style: t.labelMedium?.copyWith(
+                    color: AppColors.textTertiary,
+                    fontFamily: 'Sora')),
+          ]),
           const Spacer(),
-          AddButton(label: '＋ Add Farm', onTap: () => showFarmFormDialog(context, ref)),
+          AddButton(
+            label: 'Add New Farm',
+            onTap: () => showFarmFormDialog(context, ref),
+          ),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
+
+        // ── Grid ─────────────────────────────────────────────────────────────
         if (data.farms.isEmpty)
-          const Center(child: EmptyState(icon: '🌾', title: 'No farms yet', subtitle: 'Add your first farm to get started'))
+          const Expanded(
+            child: Center(
+              child: EmptyState(
+                icon: '🌾',
+                title: 'No farms yet',
+                subtitle: 'Add your first farm to start tracking harvests and markets',
+              ),
+            ),
+          )
         else
           Expanded(
             child: LayoutBuilder(builder: (context, constraints) {
-              final cols = (constraints.maxWidth / 290).floor().clamp(1, 4);
+              final cols = (constraints.maxWidth / 320).floor().clamp(1, 4);
               return GridView.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
-                  crossAxisSpacing: 12, mainAxisSpacing: 12,
-                  childAspectRatio: 1.4,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.1, // Adjusted for more vertical content
                 ),
                 itemCount: data.farms.length,
                 itemBuilder: (_, i) {
@@ -48,12 +74,12 @@ class FarmsScreen extends ConsumerWidget {
                     onDelete: () async {
                       final ok = await showConfirmDialog(context,
                           message: 'Delete "${farm.name}"? This will also remove associated markets.');
-                      if (ok) ref.read(appDataProvider.notifier).deleteFarm(farm.id);
+                      if (ok) ref.read(appDataProvider).deleteFarm(farm.id);
                     },
                     onAddMandi: () => showMandiFormDialog(context, ref, farm.id),
                     onDeleteMandi: (mId) async {
                       final ok = await showConfirmDialog(context, message: 'Delete this market?');
-                      if (ok) ref.read(appDataProvider.notifier).deleteMandi(mId);
+                      if (ok) ref.read(appDataProvider).deleteMandi(mId);
                     },
                   );
                 },
@@ -73,9 +99,12 @@ class _FarmCard extends StatelessWidget {
   final ValueChanged<String> onDeleteMandi;
 
   const _FarmCard({
-    required this.farm, required this.mandis,
-    required this.onEdit, required this.onDelete,
-    required this.onAddMandi, required this.onDeleteMandi,
+    required this.farm,
+    required this.mandis,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onAddMandi,
+    required this.onDeleteMandi,
   });
 
   @override
@@ -85,95 +114,271 @@ class _FarmCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.radiusLg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.shadow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border.withOpacity(0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header
-          Row(children: [
-            Container(width: 40, height: 40,
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Card Header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.greenPale, Color(0xFFC9E6A0)],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  colors: [AppColors.greenMid.withOpacity(0.15), AppColors.greenMid.withOpacity(0.05)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Center(child: Text('🌾', style: TextStyle(fontSize: 20))),
+              child: const Center(child: Text('🌾', style: TextStyle(fontSize: 22))),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(farm.name, style: t.titleMedium?.copyWith(fontSize: 15)),
-              Row(children: [
-                AppBadge(label: farm.type, variant: BadgeVariant.green),
-                if (farm.area.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Text(farm.area, style: t.labelSmall?.copyWith(color: AppColors.textTertiary)),
-                ],
-              ]),
-            ])),
-            ActionIconButton(icon: Icons.edit_outlined, onTap: onEdit, isDanger: false),
-            const SizedBox(width: 4),
-            ActionIconButton(icon: Icons.delete_outline, onTap: onDelete, isDanger: true),
-          ]),
-          if (farm.address.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(children: [
-              const Icon(Icons.location_on_outlined, size: 12, color: AppColors.textTertiary),
-              const SizedBox(width: 4),
-              Expanded(child: Text(farm.address,
-                  style: t.labelSmall?.copyWith(color: AppColors.textTertiary),
-                  overflow: TextOverflow.ellipsis)),
-            ]),
-          ],
-          const SizedBox(height: 10),
-          Container(height: 1, color: AppColors.border),
-          const SizedBox(height: 10),
-          // Markets
-          Text('MARKETS', style: t.labelMedium?.copyWith(
-              color: AppColors.textTertiary, fontSize: 10, letterSpacing: 0.08)),
-          const SizedBox(height: 6),
-          ...mandis.map((m) => Padding(
-            padding: const EdgeInsets.only(bottom: 5),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(m.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                  if (m.location.isNotEmpty)
-                    Text(m.location, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
-                ])),
-                ActionIconButton(icon: Icons.close, onTap: () => onDeleteMandi(m.id), isDanger: true),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  farm.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    fontFamily: 'Sora',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(children: [
+                  AppBadge(label: farm.type, variant: BadgeVariant.green),
+                  if (farm.area.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      farm.area,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textTertiary,
+                        fontFamily: 'Sora',
+                      ),
+                    ),
+                  ],
+                ]),
               ]),
             ),
-          )),
-          const SizedBox(height: 4),
-          InkWell(
-            onTap: onAddMandi,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppColors.border2,
-                    style: BorderStyle.solid),
+            _ActionBtn(icon: Icons.edit_rounded, onTap: onEdit, color: AppColors.greenMid),
+            const SizedBox(width: 8),
+            _ActionBtn(icon: Icons.delete_rounded, onTap: onDelete, color: AppColors.red, isDanger: true),
+          ]),
+        ),
+
+        if (farm.address.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              const Icon(Icons.location_on_rounded, size: 13, color: AppColors.textTertiary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  farm.address,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textTertiary,
+                    fontFamily: 'Sora',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.add, size: 14, color: AppColors.textSecondary),
-                SizedBox(width: 4),
-                Text('Add Market', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ]),
+            ]),
+          ),
+
+        const SizedBox(height: 16),
+        const Divider(height: 1, color: AppColors.border),
+
+        // Markets Section
+        Expanded(
+          child: Container(
+            color: AppColors.surface2.withOpacity(0.5),
+            child: ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'CONNECTED MARKETS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textTertiary,
+                        letterSpacing: 0.08,
+                        fontFamily: 'Sora',
+                      ),
+                    ),
+                    Text(
+                      '${mandis.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.greenMid,
+                        fontFamily: 'Sora',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (mandis.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Text(
+                        'No markets linked',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textTertiary,
+                          fontFamily: 'Sora',
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...mandis.map((m) => _MandiItem(m: m, onDelete: () => onDeleteMandi(m.id))),
+                const SizedBox(height: 8),
+                _AddMandiButton(onTap: onAddMandi),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _MandiItem extends StatelessWidget {
+  final Mandi m;
+  final VoidCallback onDelete;
+  const _MandiItem({required this.m, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        const Icon(Icons.store_rounded, size: 14, color: AppColors.greenMid),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              m.name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                fontFamily: 'Sora',
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (m.location.isNotEmpty)
+              Text(
+                m.location,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textTertiary,
+                  fontFamily: 'Sora',
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+          ]),
+        ),
+        InkWell(
+          onTap: onDelete,
+          borderRadius: BorderRadius.circular(4),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(Icons.close_rounded, size: 14, color: AppColors.red),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _AddMandiButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddMandiButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border2, style: BorderStyle.solid),
+        ),
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.add_rounded, size: 16, color: AppColors.textSecondary),
+          SizedBox(width: 6),
+          Text(
+            'Link Market',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              fontFamily: 'Sora',
             ),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color color;
+  final bool isDanger;
+
+  const _ActionBtn({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+    this.isDanger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isDanger ? AppColors.red.withOpacity(0.08) : color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: isDanger ? AppColors.red : color),
+        ),
       ),
     );
   }
