@@ -1,268 +1,220 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../data/providers/auth_provider.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
+import '../dashboard/dashboard_screen.dart';
+
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  final _usernameCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure = true;
-  bool _showError = false;
-  late AnimationController _popCtrl;
-  late Animation<double> _scaleAnim;
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _popCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 450));
-    _scaleAnim = CurvedAnimation(
-        parent: _popCtrl,
-        curve: const ElasticOutCurve(0.9));
-    _popCtrl.forward();
-  }
+  bool isLoading = false;
+  bool obscurePassword = true;
 
-  @override
-  void dispose() {
-    _popCtrl.dispose();
-    _usernameCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
+  Future<void> login() async {
+    if (isLoading) return;
 
-  void _doLogin() {
-    final success = ref.read(authProvider.notifier).login(
-          _usernameCtrl.text.trim(),
-          _passwordCtrl.text,
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // Simulate API Call
+      try {
+        await Future.delayed(const Duration(seconds: 3));
+
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const DashboardScreen(),
+          ),
         );
-    if (success) {
-      context.go('/app/dashboard');
-    } else {
-      setState(() => _showError = true);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Login Successful"),
+        ),
+      );
+
+      // Navigator.pushReplacement(...)
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: Stack(
-        children: [
-          // Background blobs
-          Positioned(
-            top: -100, left: -100,
-            child: Container(
-              width: 400, height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  AppColors.greenMid.withOpacity(0.07),
-                  Colors.transparent,
-                ]),
+      backgroundColor: const Color(0xFFF6F8FB),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (isLoading)
+              const LinearProgressIndicator(
+                minHeight: 3,
               ),
-            ),
-          ),
-          Positioned(
-            bottom: -60, right: -60,
-            child: Container(
-              width: 300, height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  AppColors.greenMid.withOpacity(0.07),
-                  Colors.transparent,
-                ]),
-              ),
-            ),
-          ),
-          // Card
-          Center(
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(_scaleAnim),
-              child: FadeTransition(
-                opacity: Tween<double>(begin: 0, end: 1).animate(_popCtrl),
-                child: Container(
-                  width: 380,
-                  constraints: const BoxConstraints(maxWidth: 380),
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppShadows.shadowLg,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Logo
-                      Row(children: [
-                        Container(
-                          width: 44, height: 44,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.greenMid, AppColors.greenMuted],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Container(
+                    width: 420,
+                    padding: const EdgeInsets.all(30),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.agriculture_rounded,
+                          size: 70,
+                          color: Colors.green,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        const Text(
+                          "Shreeji Harvest Hub",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          "Sign in to continue",
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 15,
+                          ),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        TextField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            labelText: "Email",
+                            prefixIcon: const Icon(Icons.email_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.eco_rounded, color: Colors.white, size: 24),
                         ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('FarmTrack Pro',
-                                style: t.titleLarge?.copyWith(fontSize: 20)),
-                            Text('Farm Expense Management',
-                                style: t.labelSmall?.copyWith(
-                                    color: AppColors.textSecondary, fontSize: 11)),
-                          ],
-                        ),
-                      ]),
-                      const SizedBox(height: 26),
-                      Text('Welcome back 👋', style: t.displayMedium),
-                      const SizedBox(height: 4),
-                      Text('Sign in to manage your farms and mandis',
-                          style: t.bodySmall?.copyWith(color: AppColors.textSecondary)),
-                      const SizedBox(height: 24),
-                      // Username
-                      _FieldLabel('Username'),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _usernameCtrl,
-                        autofillHints: const [AutofillHints.username],
-                        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                          hintText: 'Enter username',
-                        ),
-                        onSubmitted: (_) => _doLogin(),
-                      ),
-                      const SizedBox(height: 14),
-                      // Password
-                      _FieldLabel('Password'),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _passwordCtrl,
-                        obscureText: _obscure,
-                        autofillHints: const [AutofillHints.password],
-                        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
-                        decoration: InputDecoration(
-                          hintText: 'Enter password',
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                              color: AppColors.textTertiary, size: 18,
+
+                        const SizedBox(height: 20),
+
+                        TextField(
+                          controller: passwordController,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: "Password",
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  obscurePassword = !obscurePassword;
+                                });
+                              },
                             ),
-                            onPressed: () => setState(() => _obscure = !_obscure),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
-                        onSubmitted: (_) => _doLogin(),
-                      ),
-                      // Error
-                      if (_showError) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                          decoration: BoxDecoration(
-                            color: AppColors.redPale,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.red.withOpacity(0.2)),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'Incorrect username or password. Please try again.',
-                              textAlign: TextAlign.center,
+
+                        const SizedBox(height: 30),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                                : const Text(
+                              "Login",
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.red),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
                             ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            "Forgot Password?",
                           ),
                         ),
                       ],
-                      const SizedBox(height: 8),
-                      // Login button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            backgroundColor: AppColors.greenMid,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: _doLogin,
-                          child: const Text('Sign In →',
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: RichText(
-                          text: TextSpan(
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textTertiary,
-                                fontFamily: 'Sora'),
-                            children: const [
-                              TextSpan(text: 'Demo: username '),
-                              TextSpan(
-                                  text: 'admin',
-                                  style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w600)),
-                              TextSpan(text: ' · password '),
-                              TextSpan(
-                                  text: 'farm123',
-                                  style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
-          letterSpacing: 0.05),
     );
   }
 }

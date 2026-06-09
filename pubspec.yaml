@@ -1,4 +1,4 @@
-name: shreejiharvesthub
+name: farmexpenstracker
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -55,12 +55,10 @@ dependencies:
   uuid: ^4.3.3
   shared_preferences: ^2.2.2
   collection: ^1.18.0
-  firebase_core: ^4.10.0
 
-  # Firebase (ready - comment out until configured)
-  # firebase_core: ^2.24.2
-  # firebase_auth: ^4.16.0
-  # cloud_firestore: ^4.14.0
+  firebase_core: ^4.0.0
+  firebase_auth: ^6.0.0
+  cloud_firestore: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +70,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -138,14 +138,14 @@ class _AppHeader extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('FarmTrack Pro',
+              const Text('Shreeji Harvest Hub',
                   style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary, letterSpacing: -0.3)),
               Text(
                 auth.isLoggedIn
                     ? 'Welcome, ${auth.userDisplayName}'
-                    : 'Multi-farm expense management',
+                    : 'Harvest expense management',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
@@ -167,7 +167,7 @@ class _AppHeader extends ConsumerWidget {
                 final ok = await showConfirmDialog(
                   context,
                   title: 'Log out',
-                  message: 'Log out of FarmTrack Pro?',
+                  message: 'Log out of Shreeji Harvest Hub?',
                   confirmLabel: 'Log out',
                   isDangerous: false,
                 );
