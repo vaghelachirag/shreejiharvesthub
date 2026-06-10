@@ -1,5 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../data/models/models.dart';
@@ -31,8 +35,6 @@ class DashboardScreen extends ConsumerWidget {
     final netProfit = totalSales - totalExp;
     final totalQty = sales.fold<double>(0, (s, r) => s + r.qty);
 
-    final t = Theme.of(context).textTheme;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -42,11 +44,8 @@ class DashboardScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Dashboard Filter Bar ──
                 _DashboardFilterBar(),
                 const SizedBox(height: 16),
-
-                // ── Metrics Row ──
                 IntrinsicHeight(
                   child: Row(
                     children: [
@@ -81,8 +80,6 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // ── Expense Breakdown + Farm Summary ──
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -94,18 +91,32 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // ── Recent Activity ──
                 AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       CardTitle(
                         title: 'Recent Activity',
-                        trailing: _PdfButton(onTap: () {}),
+                        trailing: _PdfButton(
+                          onTap: () => _exportPdf(
+                            context: context,
+                            sales: sales,
+                            expenses: expenses,
+                            farms: data.farms,
+                            mandis: data.mandis,
+                            crops: data.crops,
+                            totalSales: totalSales,
+                            totalExp: totalExp,
+                            netProfit: netProfit,
+                            totalQty: totalQty,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      _RecentActivityTable(sales: sales, expenses: expenses, farms: data.farms, mandis: data.mandis, crops: data.crops),
+                      _RecentActivityTable(
+                        sales: sales, expenses: expenses,
+                        farms: data.farms, mandis: data.mandis, crops: data.crops,
+                      ),
                     ],
                   ),
                 ),
@@ -119,7 +130,465 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-// ── EXPENSE BREAKDOWN CARD ───────────────────────────────────────────────────
+// ── PDF EXPORT ────────────────────────────────────────────────────────────────
+Future<void> _exportPdf({
+  required BuildContext context,
+  required List<Sale> sales,
+  required List<Expense> expenses,
+  required List<Farm> farms,
+  required List<Mandi> mandis,
+  required List<Crop> crops,
+  required double totalSales,
+  required double totalExp,
+  required double netProfit,
+  required double totalQty,
+}) async {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const _PdfProgressDialog(),
+  );
+
+  try {
+    final pdfBytes = await _buildPdf(
+      sales: sales, expenses: expenses, farms: farms,
+      mandis: mandis, crops: crops, totalSales: totalSales,
+      totalExp: totalExp, netProfit: netProfit, totalQty: totalQty,
+    );
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    await Printing.sharePdf(
+      bytes: pdfBytes,
+      filename: 'shreeji_harvest_report_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to generate PDF: $e'), backgroundColor: AppColors.red),
+    );
+  }
+}
+
+Future<Uint8List> _buildPdf({
+  required List<Sale> sales,
+  required List<Expense> expenses,
+  required List<Farm> farms,
+  required List<Mandi> mandis,
+  required List<Crop> crops,
+  required double totalSales,
+  required double totalExp,
+  required double netProfit,
+  required double totalQty,
+}) async {
+  // Load Unicode-capable fonts — supports ₹ and all Indian script glyphs
+  final fontRegular = await PdfGoogleFonts.notoSansRegular();
+  final fontBold    = await PdfGoogleFonts.notoSansBold();
+
+  final pdf = pw.Document(
+    theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
+  );
+
+  const green   = PdfColor.fromInt(0xFF22C55E);
+  const greenDk = PdfColor.fromInt(0xFF16A34A);
+  const red     = PdfColor.fromInt(0xFFEF4444);
+  const blue    = PdfColor.fromInt(0xFF3B82F6);
+  const amber   = PdfColor.fromInt(0xFFF59E0B);
+  const border  = PdfColor.fromInt(0xFFE5E7EB);
+  const textPri = PdfColor.fromInt(0xFF111827);
+  const textSec = PdfColor.fromInt(0xFF6B7280);
+
+  String fName(String id) => AppUtils.farmName(farms, id);
+  String mName(String id) => AppUtils.mandiName(mandis, id);
+  String cName(String id) => AppUtils.cropName(crops, id);
+
+  final combined = [
+    ...sales.map((s) => _PdfRow(
+        date: s.date, desc: s.buyer, farm: fName(s.farmId),
+        mandi: mName(s.mandiId), crop: cName(s.cropId),
+        qty: s.qty, amount: s.amount, isSale: true)),
+    ...expenses.map((e) => _PdfRow(
+        date: e.date, desc: e.desc, farm: fName(e.farmId),
+        mandi: mName(e.mandiId), crop: cName(e.cropId),
+        qty: 0, amount: e.amount, isSale: false)),
+  ]..sort((a, b) => b.date.compareTo(a.date));
+
+  final Map<String, double> byCategory = {};
+  for (final e in expenses) {
+    byCategory[e.cat] = (byCategory[e.cat] ?? 0) + e.amount;
+  }
+  final catSorted = byCategory.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+
+  final Map<String, double> farmSales = {};
+  final Map<String, double> farmExp   = {};
+  for (final s in sales)    farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
+  for (final e in expenses) farmExp[e.farmId]   = (farmExp[e.farmId]   ?? 0) + e.amount;
+
+  final generatedOn = AppUtils.formatDate(DateTime.now().toIso8601String());
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      header: (ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text('Shreeji Harvest Hub',
+                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: greenDk)),
+                pw.Text('Harvest Management Report',
+                    style: const pw.TextStyle(fontSize: 11, color: textSec)),
+              ]),
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+                pw.Text('Generated: $generatedOn',
+                    style: const pw.TextStyle(fontSize: 10, color: textSec)),
+                pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                    style: const pw.TextStyle(fontSize: 10, color: textSec)),
+              ]),
+            ],
+          ),
+          pw.SizedBox(height: 6),
+          pw.Divider(color: border, thickness: 1),
+          pw.SizedBox(height: 8),
+        ],
+      ),
+      build: (ctx) => [
+        // ── Summary Metrics
+        pw.Text('Summary',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: textPri)),
+        pw.SizedBox(height: 10),
+        pw.Row(children: [
+          _pdfMetric('Total Sales',    AppUtils.formatCurrency(totalSales), green),
+          pw.SizedBox(width: 8),
+          _pdfMetric('Total Expenses', AppUtils.formatCurrency(totalExp),   red),
+          pw.SizedBox(width: 8),
+          _pdfMetric('Net Profit',     AppUtils.formatCurrency(netProfit),  netProfit >= 0 ? blue : amber),
+          pw.SizedBox(width: 8),
+          _pdfMetric('Production',     '${AppUtils.formatNumber(totalQty)} kg', amber),
+        ]),
+        pw.SizedBox(height: 20),
+
+        // ── Farm-wise Summary
+        if (farms.isNotEmpty) ...[
+          pw.Text('Farm-wise Summary',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: textPri)),
+          pw.SizedBox(height: 10),
+          pw.Table(
+            border: pw.TableBorder.all(color: border, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(2),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FlexColumnWidth(2),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF0FDF4)),
+                children: [_pdfTH('Farm'), _pdfTH('Sales'), _pdfTH('Expenses'), _pdfTH('Net Profit')],
+              ),
+              ...farms.map((f) {
+                final fs = farmSales[f.id] ?? 0;
+                final fe = farmExp[f.id] ?? 0;
+                final profit = fs - fe;
+                return pw.TableRow(children: [
+                  _pdfTD(f.name),
+                  _pdfTD(AppUtils.formatCurrency(fs)),
+                  _pdfTD(AppUtils.formatCurrency(fe)),
+                  _pdfTDColor(AppUtils.formatCurrency(profit), profit >= 0 ? green : red),
+                ]);
+              }),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+        ],
+
+        // ── Expense Breakdown
+        if (catSorted.isNotEmpty) ...[
+          pw.Text('Expense Breakdown by Category',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: textPri)),
+          pw.SizedBox(height: 10),
+          pw.Table(
+            border: pw.TableBorder.all(color: border, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(1.5),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF0FDF4)),
+                children: [_pdfTH('Category'), _pdfTH('Amount'), _pdfTH('% of Total')],
+              ),
+              ...catSorted.map((entry) {
+                final pct = totalExp > 0
+                    ? (entry.value / totalExp * 100).toStringAsFixed(1)
+                    : '0.0';
+                return pw.TableRow(children: [
+                  _pdfTD(entry.key),
+                  _pdfTD(AppUtils.formatCurrency(entry.value)),
+                  _pdfTD('$pct%'),
+                ]);
+              }),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+        ],
+
+        // ── Recent Activity
+        pw.Text('Recent Activity',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: textPri)),
+        pw.SizedBox(height: 10),
+        if (combined.isEmpty)
+          pw.Text('No activity for this period.', style: const pw.TextStyle(color: textSec))
+        else
+          pw.Table(
+            border: pw.TableBorder.all(color: border, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(1.4),
+              1: const pw.FlexColumnWidth(2),
+              2: const pw.FlexColumnWidth(1.5),
+              3: const pw.FlexColumnWidth(1.5),
+              4: const pw.FlexColumnWidth(1.5),
+              5: const pw.FlexColumnWidth(1.2),
+              6: const pw.FlexColumnWidth(1.5),
+              7: const pw.FlexColumnWidth(1),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF0FDF4)),
+                children: [
+                  _pdfTH('Date'), _pdfTH('Description'), _pdfTH('Farm'),
+                  _pdfTH('Market'), _pdfTH('Crop'), _pdfTH('Qty (kg)'),
+                  _pdfTH('Amount (Rs)'), _pdfTH('Type'),
+                ],
+              ),
+              ...combined.map((row) => pw.TableRow(children: [
+                _pdfTD(AppUtils.formatDate(row.date)),
+                _pdfTD(row.desc),
+                _pdfTD(row.farm),
+                _pdfTD(row.mandi),
+                _pdfTD(row.crop),
+                _pdfTD(row.qty > 0 ? AppUtils.formatNumber(row.qty) : '-'),
+                _pdfTDColor(
+                  (row.isSale ? '+' : '-') + AppUtils.formatCurrency(row.amount),
+                  row.isSale ? green : red,
+                ),
+                _pdfTDBadge(row.isSale ? 'Sale' : 'Exp', row.isSale ? green : amber),
+              ])),
+            ],
+          ),
+        pw.SizedBox(height: 20),
+        pw.Divider(color: border),
+        pw.SizedBox(height: 6),
+        pw.Text('This report was auto-generated by Shreeji Harvest Hub.',
+            style: const pw.TextStyle(fontSize: 9, color: textSec)),
+      ],
+    ),
+  );
+
+  return pdf.save();
+}
+
+// ── PDF cell helpers ──────────────────────────────────────────────────────────
+const _pdfCellPad = pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5);
+const _pdfTextSec = PdfColor.fromInt(0xFF6B7280);
+const _pdfTextPri = PdfColor.fromInt(0xFF111827);
+
+pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
+    pw.Expanded(
+      child: pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromInt(0xFFF9FAFB),
+          borderRadius: pw.BorderRadius.circular(6),
+          border: pw.Border.all(color: PdfColor.fromInt(0xFFE5E7EB), width: 0.5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(label, style: const pw.TextStyle(fontSize: 9, color: _pdfTextSec)),
+            pw.SizedBox(height: 4),
+            pw.Text(value,
+                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: color)),
+          ],
+        ),
+      ),
+    );
+
+pw.Widget _pdfTH(String text) => pw.Padding(
+  padding: _pdfCellPad,
+  child: pw.Text(text,
+      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: _pdfTextSec)),
+);
+
+pw.Widget _pdfTD(String text) => pw.Padding(
+  padding: _pdfCellPad,
+  child: pw.Text(text, style: const pw.TextStyle(fontSize: 9, color: _pdfTextPri)),
+);
+
+pw.Widget _pdfTDColor(String text, PdfColor color) => pw.Padding(
+  padding: _pdfCellPad,
+  child: pw.Text(text,
+      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: color)),
+);
+
+pw.Widget _pdfTDBadge(String text, PdfColor color) {
+  final bg = PdfColor(
+    color.red   * 0.15 + 0.85,
+    color.green * 0.15 + 0.85,
+    color.blue  * 0.15 + 0.85,
+  );
+  return pw.Padding(
+    padding: _pdfCellPad,
+    child: pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: pw.BoxDecoration(
+        color: bg,
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Text(text,
+          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: color)),
+    ),
+  );
+}
+
+class _PdfRow {
+  final String date, desc, farm, mandi, crop;
+  final double qty, amount;
+  final bool isSale;
+  const _PdfRow({
+    required this.date, required this.desc, required this.farm,
+    required this.mandi, required this.crop, required this.qty,
+    required this.amount, required this.isSale,
+  });
+}
+
+// ── PDF PROGRESS DIALOG ───────────────────────────────────────────────────────
+class _PdfProgressDialog extends StatefulWidget {
+  const _PdfProgressDialog();
+  @override
+  State<_PdfProgressDialog> createState() => _PdfProgressDialogState();
+}
+
+class _PdfProgressDialogState extends State<_PdfProgressDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  int _msgIndex = 0;
+
+  static const _messages = [
+    'Preparing report data…',
+    'Building tables…',
+    'Generating PDF…',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4));
+    _anim = TweenSequence<double>([
+      TweenSequenceItem(
+          tween: Tween(begin: 0.0, end: 0.5).chain(CurveTween(curve: Curves.easeOut)),
+          weight: 40),
+      TweenSequenceItem(
+          tween: Tween(begin: 0.5, end: 0.85).chain(CurveTween(curve: Curves.easeInOut)),
+          weight: 60),
+    ]).animate(_ctrl);
+    _ctrl.forward();
+    Future.delayed(const Duration(milliseconds: 700),  () { if (mounted) setState(() => _msgIndex = 1); });
+    Future.delayed(const Duration(milliseconds: 1600), () { if (mounted) setState(() => _msgIndex = 2); });
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(26),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppShadows.shadowLg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.blue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.blue, size: 24),
+            ),
+            const SizedBox(height: 16),
+            const Text('Generating PDF',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary, fontFamily: 'Sora')),
+            const SizedBox(height: 6),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                _messages[_msgIndex],
+                key: ValueKey(_msgIndex),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Sora'),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              height: 6,
+              decoration: BoxDecoration(
+                  color: AppColors.surface2, borderRadius: BorderRadius.circular(3)),
+              child: AnimatedBuilder(
+                animation: _anim,
+                builder: (_, __) => ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: _anim.value,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                              colors: [AppColors.blue, AppColors.greenMid]),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AnimatedBuilder(
+              animation: _anim,
+              builder: (_, __) => Align(
+                alignment: Alignment.centerRight,
+                child: Text('${(_anim.value * 100).toInt()}%',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: AppColors.textTertiary, fontFamily: 'Sora')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── EXPENSE BREAKDOWN CARD ────────────────────────────────────────────────────
 class _ExpenseBreakdownCard extends StatelessWidget {
   final List<Expense> expenses;
   const _ExpenseBreakdownCard({required this.expenses});
@@ -132,12 +601,10 @@ class _ExpenseBreakdownCard extends StatelessWidget {
       byCategory[e.cat] = (byCategory[e.cat] ?? 0) + e.amount;
     }
     final sorted = byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-
     final colors = [
       AppColors.greenMid, AppColors.amber, AppColors.blue,
       AppColors.greenMuted, AppColors.red, AppColors.textTertiary,
     ];
-
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -148,11 +615,11 @@ class _ExpenseBreakdownCard extends StatelessWidget {
             const EmptyState(icon: '📊', title: 'No expenses for this period')
           else
             ...sorted.asMap().entries.map((e) => ProgressRow(
-                  label: e.value.key,
-                  fraction: total > 0 ? e.value.value / total : 0,
-                  valueLabel: AppUtils.formatCurrency(e.value.value),
-                  barColor: colors[e.key % colors.length],
-                )),
+              label: e.value.key,
+              fraction: total > 0 ? e.value.value / total : 0,
+              valueLabel: AppUtils.formatCurrency(e.value.value),
+              barColor: colors[e.key % colors.length],
+            )),
         ],
       ),
     );
@@ -164,7 +631,6 @@ class _FarmSummaryCard extends StatelessWidget {
   final List<Sale> sales;
   final List<Expense> expenses;
   final List<Farm> farms;
-
   const _FarmSummaryCard({required this.sales, required this.expenses, required this.farms});
 
   @override
@@ -173,7 +639,6 @@ class _FarmSummaryCard extends StatelessWidget {
     final Map<String, double> farmExp = {};
     for (final s in sales) farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
     for (final e in expenses) farmExp[e.farmId] = (farmExp[e.farmId] ?? 0) + e.amount;
-
     final totalSales = sales.fold<double>(0, (s, r) => s + r.amount);
     final totalExp = expenses.fold<double>(0, (s, r) => s + r.amount);
 
@@ -196,19 +661,14 @@ class _FarmSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Expanded(
-                        child: Text(f.name,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Sora')),
-                      ),
+                      Expanded(child: Text(f.name,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600, fontFamily: 'Sora'))),
                       Text(
-                        profit >= 0 ? '▲ ${AppUtils.formatCurrency(profit)}' : '▼ ${AppUtils.formatCurrency(profit.abs())}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                        profit >= 0
+                            ? '▲ ${AppUtils.formatCurrency(profit)}'
+                            : '▼ ${AppUtils.formatCurrency(profit.abs())}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
                             fontFamily: 'Sora',
                             color: profit >= 0 ? AppColors.greenMid : AppColors.red),
                       ),
@@ -231,22 +691,13 @@ class _FarmSummaryCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.only(top: 8),
               child: Row(children: [
-                const Expanded(
-                    child: Text('TOTAL NET',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Sora',
-                            color: AppColors.textSecondary,
-                            letterSpacing: 0.5))),
+                const Expanded(child: Text('TOTAL NET',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                        fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.5))),
                 Text(AppUtils.formatCurrency(totalSales - totalExp),
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                         fontFamily: 'Sora',
-                        color: (totalSales - totalExp) >= 0
-                            ? AppColors.greenMid
-                            : AppColors.red)),
+                        color: (totalSales - totalExp) >= 0 ? AppColors.greenMid : AppColors.red)),
               ]),
             ),
           ],
@@ -262,12 +713,9 @@ class _DashboardFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(appDataProvider);
     final dashFilter = ref.watch(dashboardFilterProvider);
-
     final farmMandis = dashFilter.farmId.isEmpty
         ? data.mandis
-        : data.mandis
-            .where((m) => m.farmId == dashFilter.farmId || m.farmId.isEmpty)
-            .toList();
+        : data.mandis.where((m) => m.farmId == dashFilter.farmId || m.farmId.isEmpty).toList();
     final farmCrops = dashFilter.farmId.isEmpty
         ? data.crops
         : data.crops.where((c) => c.farmId == dashFilter.farmId).toList();
@@ -278,88 +726,57 @@ class _DashboardFilterBar extends ConsumerWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border.withOpacity(0.8)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
-          // ── Farm
           const Icon(Icons.eco_rounded, size: 16, color: AppColors.greenMid),
           const SizedBox(width: 8),
-          const Text('FARM',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Sora',
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.05)),
+          const Text('FARM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+              fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.05)),
           const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.farmId.isEmpty ? '' : dashFilter.farmId,
             items: [
               const DropdownMenuItem(value: '', child: Text('All farms')),
-              ...data.farms.map(
-                  (f) => DropdownMenuItem(value: f.id, child: Text(f.name))),
+              ...data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))),
             ],
-            onChanged: (v) =>
-                ref.read(dashboardFilterProvider.notifier).state =
-                    dashFilter.copyWith(
-                        farmId: v ?? '', mandiId: '', cropId: ''),
+            onChanged: (v) => ref.read(dashboardFilterProvider.notifier).state =
+                dashFilter.copyWith(farmId: v ?? '', mandiId: '', cropId: ''),
           ),
           const SizedBox(width: 16),
           Container(width: 1, height: 24, color: AppColors.border2),
           const SizedBox(width: 16),
-          // ── Mandi
           const Icon(Icons.storefront_rounded, size: 16, color: AppColors.greenMid),
           const SizedBox(width: 8),
-          const Text('MARKET',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Sora',
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.05)),
+          const Text('MARKET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+              fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.05)),
           const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.mandiId.isEmpty ? '' : dashFilter.mandiId,
             items: [
               const DropdownMenuItem(value: '', child: Text('All markets')),
-              ...farmMandis.map(
-                  (m) => DropdownMenuItem(value: m.id, child: Text(m.name))),
+              ...farmMandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))),
             ],
-            onChanged: (v) =>
-                ref.read(dashboardFilterProvider.notifier).state =
-                    dashFilter.copyWith(mandiId: v ?? ''),
+            onChanged: (v) => ref.read(dashboardFilterProvider.notifier).state =
+                dashFilter.copyWith(mandiId: v ?? ''),
           ),
           const SizedBox(width: 16),
           Container(width: 1, height: 24, color: AppColors.border2),
           const SizedBox(width: 16),
-          // ── Crop
           const Icon(Icons.grass_rounded, size: 16, color: AppColors.greenMid),
           const SizedBox(width: 8),
-          const Text('CROP',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Sora',
-                  color: AppColors.textSecondary,
-                  letterSpacing: 0.05)),
+          const Text('CROP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+              fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.05)),
           const SizedBox(width: 10),
           _FilterDrop(
             value: dashFilter.cropId.isEmpty ? '' : dashFilter.cropId,
             items: [
               const DropdownMenuItem(value: '', child: Text('All crops')),
-              ...farmCrops.map(
-                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+              ...farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
             ],
-            onChanged: (v) =>
-                ref.read(dashboardFilterProvider.notifier).state =
-                    dashFilter.copyWith(cropId: v ?? ''),
+            onChanged: (v) => ref.read(dashboardFilterProvider.notifier).state =
+                dashFilter.copyWith(cropId: v ?? ''),
           ),
         ],
       ),
@@ -371,8 +788,7 @@ class _FilterDrop extends StatelessWidget {
   final String value;
   final List<DropdownMenuItem<String>> items;
   final ValueChanged<String?> onChanged;
-  const _FilterDrop(
-      {required this.value, required this.items, required this.onChanged});
+  const _FilterDrop({required this.value, required this.items, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -386,19 +802,12 @@ class _FilterDrop extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
-          items: items,
-          onChanged: onChanged,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-              fontFamily: 'Sora'),
+          value: value, items: items, onChanged: onChanged,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary, fontFamily: 'Sora'),
           dropdownColor: AppColors.surface,
-          isDense: true,
-          iconSize: 20,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textSecondary),
+          isDense: true, iconSize: 20,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
         ),
       ),
     );
@@ -414,33 +823,25 @@ class _RecentActivityTable extends StatelessWidget {
   final List<Crop> crops;
 
   const _RecentActivityTable({
-    required this.sales,
-    required this.expenses,
-    required this.farms,
-    required this.mandis,
-    required this.crops,
+    required this.sales, required this.expenses, required this.farms,
+    required this.mandis, required this.crops,
   });
 
-  String _farmName(String id) =>
-      AppUtils.farmName(farms, id);
-  String _mandiName(String id) =>
-      AppUtils.mandiName(mandis, id);
-  String _cropName(String id) =>
-      AppUtils.cropName(crops, id);
+  String _farmName(String id)  => AppUtils.farmName(farms, id);
+  String _mandiName(String id) => AppUtils.mandiName(mandis, id);
+  String _cropName(String id)  => AppUtils.cropName(crops, id);
 
   @override
   Widget build(BuildContext context) {
     final combined = [
       ...sales.map((s) => _ActivityRow(
-            date: s.date, description: s.buyer, farmId: s.farmId,
-            mandiId: s.mandiId, cropId: s.cropId, qty: s.qty,
-            amount: s.amount, isSale: true,
-          )),
+          date: s.date, description: s.buyer, farmId: s.farmId,
+          mandiId: s.mandiId, cropId: s.cropId, qty: s.qty,
+          amount: s.amount, isSale: true)),
       ...expenses.map((e) => _ActivityRow(
-            date: e.date, description: e.desc, farmId: e.farmId,
-            mandiId: e.mandiId, cropId: e.cropId, qty: 0,
-            amount: e.amount, isSale: false,
-          )),
+          date: e.date, description: e.desc, farmId: e.farmId,
+          mandiId: e.mandiId, cropId: e.cropId, qty: 0,
+          amount: e.amount, isSale: false)),
     ]..sort((a, b) => b.date.compareTo(a.date));
 
     if (combined.isEmpty) {
@@ -519,23 +920,15 @@ class _ActivityRow {
 class _TH extends StatelessWidget {
   final String text;
   const _TH(this.text);
-
   @override
-  Widget build(BuildContext context) {
-    return Text(text.toUpperCase(),
-        style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-            fontFamily: 'Sora',
-            color: AppColors.textTertiary,
-            letterSpacing: 0.08));
-  }
+  Widget build(BuildContext context) => Text(text.toUpperCase(),
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
+          fontFamily: 'Sora', color: AppColors.textTertiary, letterSpacing: 0.08));
 }
 
 class _PdfButton extends StatelessWidget {
   final VoidCallback onTap;
   const _PdfButton({required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -543,22 +936,15 @@ class _PdfButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.blue,
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(color: AppColors.blue, borderRadius: BorderRadius.circular(8)),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.picture_as_pdf_rounded, size: 14, color: Colors.white),
             SizedBox(width: 8),
             Text('PDF REPORT',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Sora',
-                    color: Colors.white,
-                    letterSpacing: 0.5)),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                    fontFamily: 'Sora', color: Colors.white, letterSpacing: 0.5)),
           ],
         ),
       ),
