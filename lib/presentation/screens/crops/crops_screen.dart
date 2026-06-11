@@ -45,25 +45,25 @@ class _State extends ConsumerState<CropsScreen> {
           child: crops.isEmpty
               ? const Center(child: EmptyState(icon: '🌱', title: 'No crops yet', subtitle: 'Add your first crop'))
               : LayoutBuilder(builder: (context, constraints) {
-                  final cols = (constraints.maxWidth / 290).floor().clamp(1, 4);
-                  return GridView.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      crossAxisSpacing: 12, mainAxisSpacing: 12,
-                      childAspectRatio: 1.65,
-                    ),
-                    itemCount: crops.length,
-                    itemBuilder: (_, i) => _CropCard(
-                      crop: crops[i],
-                      farmName: AppUtils.farmName(data.farms, crops[i].farmId),
-                      onEdit: () => _showCropForm(context, crops[i]),
-                      onDelete: () async {
-                        final ok = await showConfirmDialog(context, message: 'Delete crop "${crops[i].name}"?');
-                        if (ok) ref.read(appDataProvider).deleteCrop(crops[i].id);
-                      },
-                    ),
-                  );
-                }),
+            final cols = (constraints.maxWidth / 290).floor().clamp(1, 4);
+            return GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                crossAxisSpacing: 12, mainAxisSpacing: 12,
+                childAspectRatio: 1.65,
+              ),
+              itemCount: crops.length,
+              itemBuilder: (_, i) => _CropCard(
+                crop: crops[i],
+                farmName: AppUtils.farmName(data.farms, crops[i].farmId),
+                onEdit: () => _showCropForm(context, crops[i]),
+                onDelete: () async {
+                  final ok = await showConfirmDialog(context, message: 'Delete crop "${crops[i].name}"?');
+                  if (ok) ref.read(appDataProvider).deleteCrop(crops[i].id);
+                },
+              ),
+            );
+          }),
         ),
       ]),
     );
@@ -100,39 +100,71 @@ class _State extends ConsumerState<CropsScreen> {
           )),
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: _fld('Start Date', TextField(controller: startCtrl, style: _s, decoration: _d('YYYY-MM-DD')))),
+            Expanded(child: _fld('Start Date', _DatePickerField(
+              controller: startCtrl,
+              hint: 'YYYY-MM-DD',
+              onPick: () async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: _parseDate(startCtrl.text) ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  startCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+                }
+              },
+            ))),
             const SizedBox(width: 10),
-            Expanded(child: _fld('End Date', TextField(controller: endCtrl, style: _s, decoration: _d('YYYY-MM-DD')))),
+            Expanded(child: _fld('End Date', _DatePickerField(
+              controller: endCtrl,
+              hint: 'YYYY-MM-DD',
+              onPick: () async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: _parseDate(endCtrl.text) ?? _parseDate(startCtrl.text) ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  endCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+                }
+              },
+            ))),
           ]),
           const SizedBox(height: 20),
           Container(padding: const EdgeInsets.only(top: 14),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              const SizedBox(width: 8),
-              ElevatedButton(onPressed: () {
-                if (nameCtrl.text.trim().isEmpty || farmId.isEmpty) return;
-                final notifier = ref.read(appDataProvider);
-                final crop = Crop(
-                  id: existing?.id ?? notifier.newId('c'),
-                  farmId: farmId, name: nameCtrl.text.trim(),
-                  start: startCtrl.text.trim(), end: endCtrl.text.trim(),
-                );
-                if (existing != null) notifier.updateCrop(crop); else notifier.addCrop(crop);
-                Navigator.pop(ctx);
-              }, child: const Text('Save')),
-            ])),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                const SizedBox(width: 8),
+                ElevatedButton(onPressed: () {
+                  if (nameCtrl.text.trim().isEmpty || farmId.isEmpty) return;
+                  final notifier = ref.read(appDataProvider);
+                  final crop = Crop(
+                    id: existing?.id ?? notifier.newId('c'),
+                    farmId: farmId, name: nameCtrl.text.trim(),
+                    start: startCtrl.text.trim(), end: endCtrl.text.trim(),
+                  );
+                  if (existing != null) notifier.updateCrop(crop); else notifier.addCrop(crop);
+                  Navigator.pop(ctx);
+                }, child: const Text('Save')),
+              ])),
         ]),
       ),
     )));
   }
 
   Widget _fld(String label, Widget child) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(label.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.04)),
-      const SizedBox(height: 4), child,
-    ]);
+      crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 0.04)),
+        const SizedBox(height: 4), child,
+      ]);
+
+  DateTime? _parseDate(String v) {
+    try { return v.length == 10 ? DateTime.parse(v) : null; } catch (_) { return null; }
+  }
 
   static const _s = TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora');
   static const _hs = TextStyle(fontSize: 13, color: AppColors.textTertiary, fontFamily: 'Sora');
@@ -146,6 +178,42 @@ class _State extends ConsumerState<CropsScreen> {
   );
 }
 
+// ── DATE PICKER FIELD ─────────────────────────────────────────────────────────
+class _DatePickerField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final VoidCallback onPick;
+
+  const _DatePickerField({required this.controller, required this.hint, required this.onPick});
+
+  static const _s = TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora');
+  static const _hs = TextStyle(fontSize: 13, color: AppColors.textTertiary, fontFamily: 'Sora');
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      style: _s,
+      readOnly: true,
+      onTap: onPick,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: _hs,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        suffixIcon: GestureDetector(
+          onTap: onPick,
+          child: const Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textSecondary),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: AppColors.border2, width: 1.5)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(9), borderSide: const BorderSide(color: AppColors.greenLight, width: 1.5)),
+        filled: true,
+        fillColor: AppColors.surface2,
+      ),
+    );
+  }
+}
+
 // ── CROP CARD ─────────────────────────────────────────────────────────────────
 class _CropCard extends StatelessWidget {
   final Crop crop;
@@ -154,11 +222,11 @@ class _CropCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _CropCard({required this.crop, required this.farmName,
-      required this.onEdit, required this.onDelete});
+    required this.onEdit, required this.onDelete});
 
   static const _cropEmojis = {'tomato': '🍅', 'okra': '🥦', 'cabbage': '🥬',
-      'brinjal': '🍆', 'wheat': '🌾', 'rice': '🌾', 'potato': '🥔',
-      'onion': '🧅', 'carrot': '🥕', 'corn': '🌽'};
+    'brinjal': '🍆', 'wheat': '🌾', 'rice': '🌾', 'potato': '🥔',
+    'onion': '🧅', 'carrot': '🥕', 'corn': '🌽'};
 
   String get _emoji {
     final key = crop.name.toLowerCase();
@@ -188,10 +256,10 @@ class _CropCard extends StatelessWidget {
       child: Stack(children: [
         // Left accent bar
         Positioned(left: 0, top: 0, bottom: 0,
-          child: Container(width: 4, decoration: BoxDecoration(
-            color: leftBar,
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
-          ))),
+            child: Container(width: 4, decoration: BoxDecoration(
+              color: leftBar,
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
+            ))),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
