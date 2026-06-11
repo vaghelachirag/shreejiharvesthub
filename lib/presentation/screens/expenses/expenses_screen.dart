@@ -155,9 +155,10 @@ class _State extends ConsumerState<ExpensesScreen> {
                             DataCell(Text(mandiName(e.mandiId), style: cellStyle)),
                             DataCell(Text(cropName(e.cropId), style: cellStyle)),
                             DataCell(AppBadge(label: e.payMode,
-                                variant: e.payMode == 'Cash'   ? BadgeVariant.green
-                                    : e.payMode == 'Online' ? BadgeVariant.blue
-                                    : BadgeVariant.grey)),
+                                variant: e.payMode == 'Cash'     ? BadgeVariant.green
+                                    : e.payMode == 'Online'  ? BadgeVariant.blue
+                                    : e.payMode == 'Bank'    ? BadgeVariant.blue
+                                    : BadgeVariant.amber)),  // Agnadiyu
                             DataCell(Text(AppUtils.formatCurrency(e.amount),
                                 style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.amber))),
                             DataCell(Row(mainAxisSize: MainAxisSize.min, children: [

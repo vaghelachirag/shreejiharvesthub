@@ -16,14 +16,15 @@ Future<void> showSaleFormDialog(
 
 // ── BREAKDOWN ROW ─────────────────────────────────────────────────────────────
 class _BdRow {
-  final TextEditingController qty  = TextEditingController();
-  final TextEditingController rate = TextEditingController();
+  final TextEditingController qty     = TextEditingController();
+  final TextEditingController rate    = TextEditingController();
+  final TextEditingController quality = TextEditingController();
   double get sub {
     final q = double.tryParse(qty.text)  ?? 0;
     final r = double.tryParse(rate.text) ?? 0;
     return q * r;
   }
-  void dispose() { qty.dispose(); rate.dispose(); }
+  void dispose() { qty.dispose(); rate.dispose(); quality.dispose(); }
 }
 
 // ── DIALOG ────────────────────────────────────────────────────────────────────
@@ -37,9 +38,9 @@ class _SaleFormDialog extends ConsumerStatefulWidget {
 
 class _State extends ConsumerState<_SaleFormDialog> {
   // Controllers
-  final _buyerCtrl    = TextEditingController();
-  final _overrideCtrl = TextEditingController();
-  final _deductCtrl   = TextEditingController();
+  final _buyerCtrl      = TextEditingController();
+  final _deductCtrl     = TextEditingController();
+  final _deductDescCtrl = TextEditingController();
 
   // State
   String _date    = '';
@@ -53,10 +54,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
 
   // ── Computed ──────────────────────────────────────────────────────────────
   double get _grossFromRows => _rows.fold(0.0, (s, r) => s + r.sub);
-  double get _grossAmount {
-    final ov = double.tryParse(_overrideCtrl.text);
-    return (ov != null && ov > 0) ? ov : _grossFromRows;
-  }
+  double get _grossAmount  => _grossFromRows;
   double get _deduction  => double.tryParse(_deductCtrl.text) ?? 0;
   double get _netAmount  => _grossAmount - _deduction;
   double get _totalQty   => _rows.fold(0.0, (s, r) => s + (double.tryParse(r.qty.text) ?? 0));
@@ -82,17 +80,17 @@ class _State extends ConsumerState<_SaleFormDialog> {
     if (e != null) {
       _buyerCtrl.text = e.buyer;
       _deductCtrl.text = e.deduction > 0 ? e.deduction.toStringAsFixed(0) : '';
+      _deductDescCtrl.text = e.deductDesc;
       _date = e.date; _farmId = e.farmId; _mandiId = e.mandiId;
       _cropId = e.cropId; _payMode = e.payMode;
       if (e.breakdown.isNotEmpty) {
         for (final b in e.breakdown) {
           final r = _BdRow();
-          r.qty.text  = b.qty.toString();
-          r.rate.text = b.rate.toString();
+          r.qty.text     = b.qty.toString();
+          r.rate.text    = b.rate.toString();
+          r.quality.text = b.quality;
           _rows.add(r);
         }
-        final computed = e.breakdown.fold<double>(0, (s, b) => s + b.sub);
-        if ((computed - e.amount).abs() > 1) _overrideCtrl.text = e.amount.toStringAsFixed(0);
       } else {
         if (e.rate > 0) {
           final r = _BdRow();
@@ -100,7 +98,6 @@ class _State extends ConsumerState<_SaleFormDialog> {
           r.rate.text = e.rate.toStringAsFixed(0);
           _rows.add(r);
         } else {
-          _overrideCtrl.text = e.amount.toStringAsFixed(0);
           _rows.add(_BdRow());
         }
       }
@@ -113,7 +110,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
 
   @override
   void dispose() {
-    _buyerCtrl.dispose(); _overrideCtrl.dispose(); _deductCtrl.dispose();
+    _buyerCtrl.dispose(); _deductCtrl.dispose(); _deductDescCtrl.dispose();
     for (final r in _rows) r.dispose();
     super.dispose();
   }
@@ -137,7 +134,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
       return;
     }
     if (_netAmount <= 0 && _grossAmount <= 0) {
-      setState(() => _validationError = 'Enter Qty × Rate in Stock Breakdown, or use Override Gross.');
+      setState(() => _validationError = 'Enter Qty × Rate in Stock Breakdown.');
       return;
     }
     setState(() => _validationError = null);
@@ -146,24 +143,26 @@ class _State extends ConsumerState<_SaleFormDialog> {
     final breakdown = _rows
         .where((r) => (double.tryParse(r.qty.text) ?? 0) > 0 || (double.tryParse(r.rate.text) ?? 0) > 0)
         .map((r) => BreakdownItem(
-              qty: (double.tryParse(r.qty.text) ?? 0).toInt(),
-              rate: double.tryParse(r.rate.text) ?? 0,
-              sub: r.sub))
+        qty: (double.tryParse(r.qty.text) ?? 0).toInt(),
+        rate: double.tryParse(r.rate.text) ?? 0,
+        sub: r.sub,
+        quality: r.quality.text.trim()))
         .toList();
 
     final sale = Sale(
-      id:        widget.existing?.id ?? notifier.newId('s'),
-      date:      _date,
-      buyer:     buyer,
-      qty:       _totalQty,
-      rate:      breakdown.length == 1 ? breakdown.first.rate : 0,
-      amount:    _netAmount,
-      deduction: _deduction,
-      farmId:    _farmId,
-      mandiId:   _mandiId,
-      cropId:    _cropId,
-      payMode:   _payMode,
-      breakdown: breakdown,
+      id:         widget.existing?.id ?? notifier.newId('s'),
+      date:       _date,
+      buyer:      buyer,
+      qty:        _totalQty,
+      rate:       breakdown.length == 1 ? breakdown.first.rate : 0,
+      amount:     _netAmount,
+      deduction:  _deduction,
+      deductDesc: _deductDescCtrl.text.trim(),
+      farmId:     _farmId,
+      mandiId:    _mandiId,
+      cropId:     _cropId,
+      payMode:    _payMode,
+      breakdown:  breakdown,
     );
     if (widget.existing != null) notifier.updateSale(sale);
     else notifier.addSale(sale);
@@ -186,7 +185,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: Theme.of(ctx).colorScheme.copyWith(
-            primary: AppColors.greenMid, onPrimary: Colors.white),
+              primary: AppColors.greenMid, onPrimary: Colors.white),
         ),
         child: child!,
       ),
@@ -304,7 +303,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
                     child: _drop(
                       value: _payMode,
                       hint: 'Cash',
-                      items: ['Cash','Online','Other'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                      items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                       onChanged: (v) => setState(() => _payMode = v ?? 'Cash'),
                     ),
                   ),
@@ -313,7 +312,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
 
                 // Stock breakdown header
                 Row(children: [
-                  const Text('STOCK BREAKDOWN (QTY × RATE)',
+                  const Text('STOCK BREAKDOWN (QTY × RATE × QUALITY)',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                           color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora')),
                   const Spacer(),
@@ -336,12 +335,17 @@ class _State extends ConsumerState<_SaleFormDialog> {
                 _AmountBand(label: 'Gross Amount', amount: _grossAmount, isBold: true),
                 const SizedBox(height: 12),
 
-                // Override + Deduction
+                // Deduction amount + description
                 _TwoCol(
-                  left: _FieldBlock(label: 'OVERRIDE GROSS (OPTIONAL)',
-                    child: _numField(_overrideCtrl, 'Leave blank')),
-                  right: _FieldBlock(label: 'DEDUCTION (₹)',
-                    child: _numField(_deductCtrl, '0')),
+                  left: _FieldBlock(label: 'DEDUCTION (₹)',
+                      child: _numField(_deductCtrl, '0')),
+                  right: _FieldBlock(label: 'DEDUCTION DESCRIPTION',
+                      child: TextField(
+                        controller: _deductDescCtrl,
+                        style: _kInputStyle,
+                        decoration: _kDec('e.g. Commission, Transport...'),
+                        onChanged: (_) => setState(() {}),
+                      )),
                 ),
                 const SizedBox(height: 10),
 
@@ -410,26 +414,26 @@ class _State extends ConsumerState<_SaleFormDialog> {
   );
 
   Widget _drop({required String? value, required String hint,
-      required List<DropdownMenuItem<String>> items, required ValueChanged<String?> onChanged}) =>
-    Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: AppColors.border2, width: 1.5),
-      ),
-      child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-        value: value,
-        hint: Text(hint, style: _kHintStyle),
-        items: items,
-        onChanged: onChanged,
-        dropdownColor: AppColors.surface,
-        isExpanded: true,
-        isDense: true,
-        style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
-      )),
-    );
+    required List<DropdownMenuItem<String>> items, required ValueChanged<String?> onChanged}) =>
+      Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: AppColors.border2, width: 1.5),
+        ),
+        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+          value: value,
+          hint: Text(hint, style: _kHintStyle),
+          items: items,
+          onChanged: onChanged,
+          dropdownColor: AppColors.surface,
+          isExpanded: true,
+          isDense: true,
+          style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
+        )),
+      );
 }
 
 // ── BUYER AUTOCOMPLETE FIELD ──────────────────────────────────────────────────
@@ -523,43 +527,52 @@ class _BreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sub = row.sub;
-    return Row(children: [
-      Expanded(flex: 5, child: TextField(
-        controller: row.qty,
-        keyboardType: TextInputType.number,
-        style: _kInputStyle,
-        decoration: _kDec('Qty (kg)'),
-        onChanged: (_) => onChanged(),
-      )),
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8),
-        child: Text('×', style: TextStyle(fontSize: 16, color: AppColors.textTertiary, fontFamily: 'Sora')),
-      ),
-      Expanded(flex: 5, child: TextField(
-        controller: row.rate,
-        keyboardType: TextInputType.number,
-        style: _kInputStyle,
-        decoration: _kDec('Rate (₹)'),
-        onChanged: (_) => onChanged(),
-      )),
-      SizedBox(width: 82, child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Text(sub > 0 ? '= ₹${sub.toStringAsFixed(0)}' : '= —',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Sora')),
-      )),
-      GestureDetector(
-        onTap: onRemove,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 28, height: 28,
-          decoration: BoxDecoration(
-            color: onRemove != null ? AppColors.redPale : AppColors.surface2,
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: onRemove != null ? AppColors.red.withOpacity(0.25) : AppColors.border),
-          ),
-          child: Icon(Icons.close, size: 14,
-              color: onRemove != null ? AppColors.red : AppColors.textTertiary),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(flex: 5, child: TextField(
+          controller: row.qty,
+          keyboardType: TextInputType.number,
+          style: _kInputStyle,
+          decoration: _kDec('Qty (kg)'),
+          onChanged: (_) => onChanged(),
+        )),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('×', style: TextStyle(fontSize: 16, color: AppColors.textTertiary, fontFamily: 'Sora')),
         ),
+        Expanded(flex: 5, child: TextField(
+          controller: row.rate,
+          keyboardType: TextInputType.number,
+          style: _kInputStyle,
+          decoration: _kDec('Rate (₹)'),
+          onChanged: (_) => onChanged(),
+        )),
+        SizedBox(width: 82, child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(sub > 0 ? '= ₹${sub.toStringAsFixed(0)}' : '= —',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Sora')),
+        )),
+        GestureDetector(
+          onTap: onRemove,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: onRemove != null ? AppColors.redPale : AppColors.surface2,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: onRemove != null ? AppColors.red.withOpacity(0.25) : AppColors.border),
+            ),
+            child: Icon(Icons.close, size: 14,
+                color: onRemove != null ? AppColors.red : AppColors.textTertiary),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 6),
+      TextField(
+        controller: row.quality,
+        style: _kInputStyle,
+        decoration: _kDec('Quality (e.g. A Grade, Premium, Mixed...)'),
+        onChanged: (_) => onChanged(),
       ),
     ]);
   }

@@ -126,9 +126,11 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           DataColumn(label: _TH('Farm')),
                           DataColumn(label: _TH('Market')),
                           DataColumn(label: _TH('Crop')),
+                          DataColumn(label: _TH('Quality')),
                           DataColumn(label: _TH('Qty (kg)'), numeric: true),
                           DataColumn(label: _TH('Rate ₹/kg'), numeric: true),
                           DataColumn(label: _TH('Deduction'), numeric: true),
+                          DataColumn(label: _TH('Deduct Desc')),
                           DataColumn(label: _TH('Payment')),
                           DataColumn(label: _TH('Amount (₹)'), numeric: true),
                           DataColumn(label: _TH('')),
@@ -142,14 +144,22 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                             DataCell(Text(farmName(s.farmId), style: cellStyle)),
                             DataCell(Text(mandiName(s.mandiId), style: cellStyle)),
                             DataCell(Text(cropName(s.cropId), style: cellStyle)),
+                            DataCell(Text(
+                              s.breakdown.isNotEmpty
+                                  ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
+                                  : '—',
+                              style: cellStyle,
+                            )),
                             DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
                             DataCell(Text(s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : 'Mixed', style: cellStyle)),
                             DataCell(Text(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '—', style: cellStyle)),
+                            DataCell(Text(s.deductDesc.isNotEmpty ? s.deductDesc : '—', style: cellStyle)),
                             DataCell(AppBadge(
                               label: s.payMode,
-                              variant: s.payMode == 'Cash'   ? BadgeVariant.green
-                                  : s.payMode == 'Online' ? BadgeVariant.blue
-                                  : BadgeVariant.amber,
+                              variant: s.payMode == 'Cash'     ? BadgeVariant.green
+                                  : s.payMode == 'Online'  ? BadgeVariant.blue
+                                  : s.payMode == 'Bank'    ? BadgeVariant.blue
+                                  : BadgeVariant.amber,   // Agnadiyu + Other
                             )),
                             DataCell(Text(AppUtils.formatCurrency(s.amount),
                                 style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.greenMid))),
@@ -297,26 +307,29 @@ Future<Uint8List> _buildSalesPdf({
       pw.Table(
         border: pw.TableBorder.all(color: border, width: 0.5),
         columnWidths: {
-          0: const pw.FlexColumnWidth(1.4),
-          1: const pw.FlexColumnWidth(1.8),
-          2: const pw.FlexColumnWidth(1.6),
-          3: const pw.FlexColumnWidth(1.6),
-          4: const pw.FlexColumnWidth(1.4),
-          5: const pw.FlexColumnWidth(1.2),
-          6: const pw.FlexColumnWidth(1.2),
-          7: const pw.FlexColumnWidth(1.3),
-          8: const pw.FlexColumnWidth(1.2),
-          9: const pw.FlexColumnWidth(1.5),
+          0: const pw.FlexColumnWidth(1.3),  // Date
+          1: const pw.FlexColumnWidth(1.6),  // Buyer
+          2: const pw.FlexColumnWidth(1.4),  // Farm
+          3: const pw.FlexColumnWidth(1.4),  // Market
+          4: const pw.FlexColumnWidth(1.3),  // Crop
+          5: const pw.FlexColumnWidth(1.4),  // Quality
+          6: const pw.FlexColumnWidth(1.0),  // Qty
+          7: const pw.FlexColumnWidth(1.0),  // Rate
+          8: const pw.FlexColumnWidth(1.1),  // Deduction
+          9: const pw.FlexColumnWidth(1.5),  // Deduct Desc
+          10: const pw.FlexColumnWidth(1.0), // Payment
+          11: const pw.FlexColumnWidth(1.4), // Amount
         },
         children: [
           pw.TableRow(
             decoration: pw.BoxDecoration(color: green),
             children: [
-              _th('Date', PdfColors.white),   _th('Buyer', PdfColors.white),
-              _th('Farm', PdfColors.white),   _th('Market', PdfColors.white),
-              _th('Crop', PdfColors.white),   _th('Qty (kg)', PdfColors.white),
-              _th('Rate/kg', PdfColors.white), _th('Deduction', PdfColors.white),
-              _th('Payment', PdfColors.white), _th('Amount (Rs)', PdfColors.white),
+              _th('Date', PdfColors.white),    _th('Buyer', PdfColors.white),
+              _th('Farm', PdfColors.white),    _th('Market', PdfColors.white),
+              _th('Crop', PdfColors.white),    _th('Quality', PdfColors.white),
+              _th('Qty (kg)', PdfColors.white), _th('Rate/kg', PdfColors.white),
+              _th('Deduction', PdfColors.white), _th('Deduct Desc', PdfColors.white),
+              _th('Payment', PdfColors.white),  _th('Amount (Rs)', PdfColors.white),
             ],
           ),
           ...sales.asMap().entries.map((entry) {
@@ -328,9 +341,13 @@ Future<Uint8List> _buildSalesPdf({
               _td(farmName(s.farmId)),
               _td(mandiName(s.mandiId)),
               _td(cropName(s.cropId)),
+              _td(s.breakdown.isNotEmpty
+                  ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
+                  : '-'),
               _tdRight(AppUtils.formatNumber(s.qty)),
               _tdRight(s.rate > 0 ? s.rate.toStringAsFixed(0) : 'Mixed'),
               _tdRight(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '-'),
+              _td(s.deductDesc.isNotEmpty ? s.deductDesc : '-'),
               _td(s.payMode),
               _tdColor(AppUtils.formatCurrency(s.amount), green),
             ]);

@@ -222,31 +222,31 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
                   ),
                 ),
                 right: _FieldBlock(label: 'PAYMENT MODE',
-                  child: _drop(value: _payMode, hint: 'Cash',
-                    items: ['Cash','Online','Other'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (v) => setState(() => _payMode = v ?? 'Cash'))),
+                    child: _drop(value: _payMode, hint: 'Cash',
+                        items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                        onChanged: (v) => setState(() => _payMode = v ?? 'Cash'))),
               ),
               const SizedBox(height: 12),
 
               // Row 2: Farm + Market
               _TwoCol(
                 left: _FieldBlock(label: 'FARM',
-                  child: _drop(value: _farmId.isEmpty ? null : _farmId, hint: '— Select farm —',
-                    items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
-                    onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }))),
+                    child: _drop(value: _farmId.isEmpty ? null : _farmId, hint: '— Select farm —',
+                        items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
+                        onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }))),
                 right: _FieldBlock(label: 'MARKET',
-                  child: _drop(value: _mandiId.isEmpty ? null : _mandiId, hint: '— None —',
-                    items: data.mandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
-                    onChanged: (v) => setState(() => _mandiId = v ?? ''))),
+                    child: _drop(value: _mandiId.isEmpty ? null : _mandiId, hint: '— None —',
+                        items: data.mandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
+                        onChanged: (v) => setState(() => _mandiId = v ?? ''))),
               ),
               const SizedBox(height: 12),
 
               // Row 3: Crop (full width)
               _FieldBlock(label: 'CROP',
-                child: _drop(value: _cropId.isEmpty ? null : _cropId, hint: '— None —',
-                  items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                  onChanged: (v) => setState(() => _cropId = v ?? ''),
-                  expand: true)),
+                  child: _drop(value: _cropId.isEmpty ? null : _cropId, hint: '— None —',
+                      items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                      onChanged: (v) => setState(() => _cropId = v ?? ''),
+                      expand: true)),
               const SizedBox(height: 16),
 
               // ── Expense Breakdown ──
@@ -343,21 +343,21 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
   }
 
   Widget _drop({required String? value, required String hint,
-      required List<DropdownMenuItem<String>> items,
-      required ValueChanged<String?> onChanged, bool expand = false}) =>
-    Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: AppColors.border2, width: 1.5)),
-      child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-        value: value, hint: Text(hint, style: _kHintStyle),
-        items: items, onChanged: onChanged,
-        dropdownColor: AppColors.surface,
-        isExpanded: true, isDense: true, style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
-      )),
-    );
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onChanged, bool expand = false}) =>
+      Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: AppColors.border2, width: 1.5)),
+        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+          value: value, hint: Text(hint, style: _kHintStyle),
+          items: items, onChanged: onChanged,
+          dropdownColor: AppColors.surface,
+          isExpanded: true, isDense: true, style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
+        )),
+      );
 }
 
 // ── EXPENSE BREAKDOWN ROW — with description autocomplete ─────────────────────
@@ -368,7 +368,7 @@ class _ExpBreakdownRow extends StatefulWidget {
   final VoidCallback? onRemove;
   final VoidCallback onChanged;
   const _ExpBreakdownRow({required this.row, required this.categories,
-      required this.suggestions, required this.onRemove, required this.onChanged});
+    required this.suggestions, required this.onRemove, required this.onChanged});
   @override
   State<_ExpBreakdownRow> createState() => _ExpBreakdownRowState();
 }
