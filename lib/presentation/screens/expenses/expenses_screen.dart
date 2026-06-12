@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../data/models/models.dart';
@@ -116,6 +117,65 @@ class _State extends ConsumerState<ExpensesScreen> {
               : Column(children: [
             Expanded(
               child: LayoutBuilder(builder: (context, constraints) {
+                final isMobile = MediaQuery.of(context).size.width.isMobile;
+                if (isMobile) {
+                  return ListView.separated(
+                    itemCount: pageExp.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final e = pageExp[i];
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: Text(e.desc.isNotEmpty ? e.desc : '—',
+                                style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary),
+                                overflow: TextOverflow.ellipsis)),
+                            AppBadge(label: e.cat, variant: BadgeVariant.amber),
+                            const SizedBox(width: 6),
+                            ActionIconButton(icon: Icons.edit_outlined,
+                                onTap: () => showExpenseFormDialog(context, ref, e)),
+                            ActionIconButton(icon: Icons.delete_outline, isDanger: true,
+                                onTap: () async {
+                                  final ok = await showConfirmDialog(context,
+                                      message: 'Delete this expense?');
+                                  if (ok) data.deleteExpense(e.id);
+                                }),
+                          ]),
+                          const SizedBox(height: 6),
+                          Wrap(spacing: 12, runSpacing: 4, children: [
+                            _InfoChip(Icons.calendar_today_outlined, AppUtils.formatDate(e.date)),
+                            if (farmName(e.farmId).isNotEmpty && farmName(e.farmId) != '—')
+                              _InfoChip(Icons.agriculture_outlined, farmName(e.farmId)),
+                            if (mandiName(e.mandiId).isNotEmpty && mandiName(e.mandiId) != '—')
+                              _InfoChip(Icons.storefront_outlined, mandiName(e.mandiId)),
+                            if (cropName(e.cropId).isNotEmpty && cropName(e.cropId) != '—')
+                              _InfoChip(Icons.grass_outlined, cropName(e.cropId)),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            AppBadge(label: e.payMode,
+                                variant: e.payMode == 'Cash'   ? BadgeVariant.green
+                                    : e.payMode == 'Online' ? BadgeVariant.blue
+                                    : e.payMode == 'Bank'   ? BadgeVariant.blue
+                                    : BadgeVariant.amber),
+                            const Spacer(),
+                            Text(AppUtils.formatCurrency(e.amount),
+                                style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w800,
+                                    color: AppColors.amber)),
+                          ]),
+                        ]),
+                      );
+                    },
+                  );
+                }
+                // ── Desktop/tablet: DataTable ──
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: ConstrainedBox(
@@ -187,11 +247,17 @@ class _State extends ConsumerState<ExpensesScreen> {
                 color: AppColors.amberPale.withOpacity(0.7),
                 border: Border(top: BorderSide(color: AppColors.amber.withOpacity(0.3))),
               ),
-              child: Row(children: [
-                Expanded(child: Text('TOTAL  (${allExp.length} entries)', style: totalStyle)),
-                Text(AppUtils.formatCurrency(totalAmt), style: amtStyle.copyWith(fontSize: 15)),
-                const SizedBox(width: 52),
-              ]),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final isMobile = MediaQuery.of(context).size.width.isMobile;
+                return Row(children: [
+                  Expanded(child: Text(
+                      isMobile ? 'TOTAL  (${allExp.length})' : 'TOTAL  (${allExp.length} entries)',
+                      style: totalStyle)),
+                  Text(AppUtils.formatCurrency(totalAmt),
+                      style: amtStyle.copyWith(fontSize: isMobile ? 14 : 15)),
+                  if (!isMobile) const SizedBox(width: 52),
+                ]);
+              }),
             ),
             if (totalPages > 1)
               _PaginationBar(
@@ -504,12 +570,25 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
     final start = (current - 2).clamp(0, (total - 5).clamp(0, total));
     final end   = (start + 5).clamp(0, total);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-      child: Row(children: [
+      child: isMobile
+          ? Row(children: [
+        _PBtn(label: '‹', enabled: onPrev != null, onTap: onPrev),
+        const SizedBox(width: 8),
+        Expanded(child: Text(
+          '$count entries  ·  ${current + 1} / $total',
+          style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary),
+          textAlign: TextAlign.center,
+        )),
+        const SizedBox(width: 8),
+        _PBtn(label: '›', enabled: onNext != null, onTap: onNext),
+      ])
+          : Row(children: [
         Text('$count entries  ·  Page ${current + 1} of $total',
             style: GoogleFonts.sora(fontSize: 12, color: AppColors.textSecondary)),
         const Spacer(),
@@ -577,4 +656,16 @@ class _PdfBtn extends StatelessWidget {
       ]),
     ),
   );
+}
+// ── MOBILE HELPER WIDGETS ─────────────────────────────────────────────────────
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InfoChip(this.icon, this.label);
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Icon(icon, size: 12, color: AppColors.textTertiary),
+    const SizedBox(width: 3),
+    Text(label, style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary)),
+  ]);
 }

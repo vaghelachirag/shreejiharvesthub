@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../data/models/models.dart';
@@ -106,6 +107,85 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
               : Column(children: [
             Expanded(
               child: LayoutBuilder(builder: (context, constraints) {
+                final isMobile = MediaQuery.of(context).size.width.isMobile;
+                if (isMobile) {
+                  // ── Mobile: card list ──
+                  return ListView.separated(
+                    itemCount: pageSales.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final s = pageSales[i];
+                      final quality = s.breakdown.isNotEmpty
+                          ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
+                          : '';
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: Text(s.buyer.isNotEmpty ? s.buyer : '—',
+                                style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary))),
+                            AppBadge(label: s.payMode,
+                                variant: s.payMode == 'Cash'   ? BadgeVariant.green
+                                    : s.payMode == 'Online' ? BadgeVariant.blue
+                                    : s.payMode == 'Bank'   ? BadgeVariant.blue
+                                    : BadgeVariant.amber),
+                            const SizedBox(width: 8),
+                            ActionIconButton(icon: Icons.edit_outlined,
+                                onTap: () => showSaleFormDialog(context, ref, s)),
+                            ActionIconButton(icon: Icons.delete_outline, isDanger: true,
+                                onTap: () async {
+                                  final ok = await showConfirmDialog(context,
+                                      message: 'Delete this sale entry?');
+                                  if (ok) data.deleteSale(s.id);
+                                }),
+                          ]),
+                          const SizedBox(height: 6),
+                          Wrap(spacing: 12, runSpacing: 4, children: [
+                            _InfoChip(Icons.calendar_today_outlined, AppUtils.formatDate(s.date)),
+                            if (farmName(s.farmId).isNotEmpty && farmName(s.farmId) != '—')
+                              _InfoChip(Icons.agriculture_outlined, farmName(s.farmId)),
+                            if (mandiName(s.mandiId).isNotEmpty && mandiName(s.mandiId) != '—')
+                              _InfoChip(Icons.storefront_outlined, mandiName(s.mandiId)),
+                            if (cropName(s.cropId).isNotEmpty && cropName(s.cropId) != '—')
+                              _InfoChip(Icons.grass_outlined, cropName(s.cropId)),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            _StatBox('Qty', '${AppUtils.formatNumber(s.qty)} kg'),
+                            const SizedBox(width: 8),
+                            _StatBox('Rate', s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : 'Mixed'),
+                            if (s.deduction > 0) ...[
+                              const SizedBox(width: 8),
+                              _StatBox('Deduction', '-${AppUtils.formatCurrency(s.deduction)}'),
+                            ],
+                          ]),
+                          if (quality.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text('Quality: $quality',
+                                style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary)),
+                          ],
+                          if (s.deductDesc.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text('Deduction note: ${s.deductDesc}',
+                                style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary)),
+                          ],
+                          const SizedBox(height: 8),
+                          Align(alignment: Alignment.centerRight,
+                              child: Text(AppUtils.formatCurrency(s.amount),
+                                  style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w800,
+                                      color: AppColors.greenMid))),
+                        ]),
+                      );
+                    },
+                  );
+                }
+                // ── Desktop/tablet: DataTable ──
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: ConstrainedBox(
@@ -194,14 +274,26 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 color: AppColors.greenPale,
                 border: Border(top: BorderSide(color: AppColors.greenMuted.withOpacity(0.4))),
               ),
-              child: Row(children: [
-                Expanded(child: Text('TOTAL  (${allSales.length} entries)',
-                    style: totalStyle.copyWith(color: AppColors.greenMid))),
-                Text('${AppUtils.formatNumber(totalQty)} kg', style: totalStyle),
-                const SizedBox(width: 32),
-                Text(AppUtils.formatCurrency(totalAmt), style: amtStyle.copyWith(fontSize: 15)),
-                const SizedBox(width: 52),
-              ]),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final isMobile = MediaQuery.of(context).size.width.isMobile;
+                if (isMobile) {
+                  return Row(children: [
+                    Expanded(child: Text('TOTAL  (${allSales.length})',
+                        style: totalStyle.copyWith(color: AppColors.greenMid))),
+                    Text('${AppUtils.formatNumber(totalQty)} kg', style: totalStyle),
+                    const SizedBox(width: 12),
+                    Text(AppUtils.formatCurrency(totalAmt), style: amtStyle.copyWith(fontSize: 14)),
+                  ]);
+                }
+                return Row(children: [
+                  Expanded(child: Text('TOTAL  (${allSales.length} entries)',
+                      style: totalStyle.copyWith(color: AppColors.greenMid))),
+                  Text('${AppUtils.formatNumber(totalQty)} kg', style: totalStyle),
+                  const SizedBox(width: 32),
+                  Text(AppUtils.formatCurrency(totalAmt), style: amtStyle.copyWith(fontSize: 15)),
+                  const SizedBox(width: 52),
+                ]);
+              }),
             ),
             if (totalPages > 1)
               _PaginationBar(
@@ -476,12 +568,27 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
     final start = (current - 2).clamp(0, (total - 5).clamp(0, total));
     final end   = (start + 5).clamp(0, total);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-      child: Row(children: [
+      child: isMobile
+      // ── Mobile: compact prev / page X of Y / next ──
+          ? Row(children: [
+        _PBtn(label: '‹', enabled: onPrev != null, onTap: onPrev),
+        const SizedBox(width: 8),
+        Expanded(child: Text(
+          '$count entries  ·  ${current + 1} / $total',
+          style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary),
+          textAlign: TextAlign.center,
+        )),
+        const SizedBox(width: 8),
+        _PBtn(label: '›', enabled: onNext != null, onTap: onNext),
+      ])
+      // ── Desktop: full pagination with numbered buttons ──
+          : Row(children: [
         Text('$count entries  ·  Page ${current + 1} of $total',
             style: GoogleFonts.sora(fontSize: 12, color: AppColors.textSecondary)),
         const Spacer(),
@@ -549,5 +656,38 @@ class _PdfBtn extends StatelessWidget {
             color: Colors.white, fontFamily: 'Sora')),
       ]),
     ),
+  );
+}
+// ── MOBILE HELPER WIDGETS ─────────────────────────────────────────────────────
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InfoChip(this.icon, this.label);
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Icon(icon, size: 12, color: AppColors.textTertiary),
+    const SizedBox(width: 3),
+    Text(label, style: GoogleFonts.sora(fontSize: 11, color: AppColors.textSecondary)),
+  ]);
+}
+
+class _StatBox extends StatelessWidget {
+  final String label, value;
+  const _StatBox(this.label, this.value);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: AppColors.surface2,
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(label, style: GoogleFonts.sora(fontSize: 9, fontWeight: FontWeight.w700,
+          color: AppColors.textTertiary, letterSpacing: 0.05)),
+      const SizedBox(height: 1),
+      Text(value, style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary)),
+    ]),
   );
 }

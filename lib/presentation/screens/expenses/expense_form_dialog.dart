@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers/app_data_provider.dart';
@@ -179,166 +180,173 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       backgroundColor: AppColors.surface,
-      child: SizedBox(
-        width: 580,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ── Title ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-            child: Row(children: [
-              Text(widget.existing != null ? 'Edit Expense' : 'Add Expense',
-                  style: GoogleFonts.sora(fontSize: 20, fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-            ]),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Body ──
-          Flexible(child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-              // Row 1: Date picker + Payment Mode
-              _TwoCol(
-                left: _FieldBlock(label: 'DATE',
-                  child: InkWell(
-                    onTap: _pickDate,
-                    child: Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface2,
-                        borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: AppColors.border2, width: 1.5),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.greenMid),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(displayDate,
-                            style: GoogleFonts.sora(fontSize: 13, color: AppColors.textPrimary))),
-                        const Icon(Icons.expand_more, size: 16, color: AppColors.textTertiary),
-                      ]),
-                    ),
-                  ),
-                ),
-                right: _FieldBlock(label: 'PAYMENT MODE',
-                    child: _drop(value: _payMode, hint: 'Cash',
-                        items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                        onChanged: (v) => setState(() => _payMode = v ?? 'Cash'))),
-              ),
-              const SizedBox(height: 12),
-
-              // Row 2: Farm + Market
-              _TwoCol(
-                left: _FieldBlock(label: 'FARM',
-                    child: _drop(value: _farmId.isEmpty ? null : _farmId, hint: '— Select farm —',
-                        items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
-                        onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }))),
-                right: _FieldBlock(label: 'MARKET',
-                    child: _drop(value: _mandiId.isEmpty ? null : _mandiId, hint: '— None —',
-                        items: data.mandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
-                        onChanged: (v) => setState(() => _mandiId = v ?? ''))),
-              ),
-              const SizedBox(height: 12),
-
-              // Row 3: Crop (full width)
-              _FieldBlock(label: 'CROP',
-                  child: _drop(value: _cropId.isEmpty ? null : _cropId, hint: '— None —',
-                      items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                      onChanged: (v) => setState(() => _cropId = v ?? ''),
-                      expand: true)),
-              const SizedBox(height: 16),
-
-              // ── Expense Breakdown ──
-              Row(children: [
-                Text('EXPENSE BREAKDOWN', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary, letterSpacing: 0.05)),
-                const Spacer(),
-                _AddRowBtn(onTap: _addExpRow),
-              ]),
-              const SizedBox(height: 8),
-              ..._expRows.asMap().entries.map((entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _ExpBreakdownRow(
-                  row: entry.value,
-                  categories: data.categories,
-                  suggestions: _descSuggestions(entry.value.desc.text),
-                  onRemove: _expRows.length > 1 ? () => _removeExpRow(entry.key) : null,
-                  onChanged: () => setState(() {}),
-                ),
-              )),
-              const SizedBox(height: 4),
-              _AmountBand(label: 'Total Expense Amount', amount: _totalExpense, color: AppColors.greenMid),
-              const SizedBox(height: 16),
-
-              // ── Deduction Breakdown ──
-              Row(children: [
-                Text('DEDUCTION BREAKDOWN', style: GoogleFonts.sora(fontSize: 11, fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary, letterSpacing: 0.05)),
-                const Spacer(),
-                _AddRowBtn(onTap: _addDedRow),
-              ]),
-              const SizedBox(height: 8),
-              ..._dedRows.asMap().entries.map((entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _DedBreakdownRow(
-                  row: entry.value,
-                  onRemove: _dedRows.length > 1 ? () => _removeDedRow(entry.key) : null,
-                  onChanged: () => setState(() {}),
-                ),
-              )),
-              const SizedBox(height: 4),
-              _AmountBand(label: 'Total Deduction', amount: _totalDed, color: AppColors.amber),
-              const SizedBox(height: 8),
-              _AmountBand(label: 'Net Expense Amount', amount: _netExpense, color: AppColors.greenMid, bold: true),
-              const SizedBox(height: 16),
-            ]),
-          )),
-
-          // ── Validation error banner ──
-          if (_validationError != null)
-            Container(
-              margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.redPale,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: AppColors.red.withOpacity(0.3)),
-              ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final sw = MediaQuery.of(context).size.width;
+        final dw = sw.isMobile ? sw * 0.96 : sw.isTablet ? sw * 0.82 : 580.0;
+        return SizedBox(width: dw,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // ── Title ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
               child: Row(children: [
-                const Icon(Icons.error_outline, size: 15, color: AppColors.red),
-                const SizedBox(width: 8),
-                Expanded(child: Text(_validationError!,
-                    style: GoogleFonts.sora(fontSize: 12, color: AppColors.red, fontWeight: FontWeight.w500))),
+                Text(widget.existing != null ? 'Edit Expense' : 'Add Expense',
+                    style: GoogleFonts.sora(fontSize: 20, fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
               ]),
             ),
+            const SizedBox(height: 16),
 
-          // ── Footer ──
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                    textStyle: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w500)),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+            // ── Body ──
+            Flexible(child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+                // Row 1: Date picker + Payment Mode
+                _TwoCol(
+                  left: _FieldBlock(label: 'DATE',
+                    child: InkWell(
+                      onTap: _pickDate,
+                      child: Container(
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface2,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: AppColors.border2, width: 1.5),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.greenMid),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(displayDate,
+                              style: GoogleFonts.sora(fontSize: 13, color: AppColors.textPrimary))),
+                          const Icon(Icons.expand_more, size: 16, color: AppColors.textTertiary),
+                        ]),
+                      ),
+                    ),
+                  ),
+                  right: _FieldBlock(label: 'PAYMENT MODE',
+                      child: _drop(value: _payMode, hint: 'Cash',
+                          items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                          onChanged: (v) => setState(() => _payMode = v ?? 'Cash'))),
+                ),
+                const SizedBox(height: 12),
+
+                // Row 2: Farm + Market
+                _TwoCol(
+                  left: _FieldBlock(label: 'FARM',
+                      child: _drop(value: _farmId.isEmpty ? null : _farmId, hint: '— Select farm —',
+                          items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
+                          onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }))),
+                  right: _FieldBlock(label: 'MARKET',
+                      child: _drop(value: _mandiId.isEmpty ? null : _mandiId, hint: '— None —',
+                          items: data.mandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
+                          onChanged: (v) => setState(() => _mandiId = v ?? ''))),
+                ),
+                const SizedBox(height: 12),
+
+                // Row 3: Crop (full width)
+                _FieldBlock(label: 'CROP',
+                    child: _drop(value: _cropId.isEmpty ? null : _cropId, hint: '— None —',
+                        items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                        onChanged: (v) => setState(() => _cropId = v ?? ''),
+                        expand: true)),
+                const SizedBox(height: 16),
+
+                // ── Expense Breakdown ──
+                Row(children: [
+                  const Flexible(child: Text('EXPENSE BREAKDOWN',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora'),
+                      overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 8),
+                  _AddRowBtn(onTap: _addExpRow),
+                ]),
+                const SizedBox(height: 8),
+                ..._expRows.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ExpBreakdownRow(
+                    row: entry.value,
+                    categories: data.categories,
+                    suggestions: _descSuggestions(entry.value.desc.text),
+                    onRemove: _expRows.length > 1 ? () => _removeExpRow(entry.key) : null,
+                    onChanged: () => setState(() {}),
+                  ),
+                )),
+                const SizedBox(height: 4),
+                _AmountBand(label: 'Total Expense Amount', amount: _totalExpense, color: AppColors.greenMid),
+                const SizedBox(height: 16),
+
+                // ── Deduction Breakdown ──
+                Row(children: [
+                  const Flexible(child: Text('DEDUCTION BREAKDOWN',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora'),
+                      overflow: TextOverflow.ellipsis)),
+                  const SizedBox(width: 8),
+                  _AddRowBtn(onTap: _addDedRow),
+                ]),
+                const SizedBox(height: 8),
+                ..._dedRows.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _DedBreakdownRow(
+                    row: entry.value,
+                    onRemove: _dedRows.length > 1 ? () => _removeDedRow(entry.key) : null,
+                    onChanged: () => setState(() {}),
+                  ),
+                )),
+                const SizedBox(height: 4),
+                _AmountBand(label: 'Total Deduction', amount: _totalDed, color: AppColors.amber),
+                const SizedBox(height: 8),
+                _AmountBand(label: 'Net Expense Amount', amount: _netExpense, color: AppColors.greenMid, bold: true),
+                const SizedBox(height: 16),
+              ]),
+            )),
+
+            // ── Validation error banner ──
+            if (_validationError != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.redPale,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.red.withOpacity(0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.error_outline, size: 15, color: AppColors.red),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_validationError!,
+                      style: GoogleFonts.sora(fontSize: 12, color: AppColors.red, fontWeight: FontWeight.w500))),
+                ]),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.greenMid, foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    textStyle: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9))),
-                onPressed: _save,
-                child: const Text('Save'),
-              ),
-            ]),
-          ),
-        ]),
-      ),
+
+            // ── Footer ──
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                      textStyle: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w500)),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.greenMid, foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                      textStyle: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9))),
+                  onPressed: _save,
+                  child: const Text('Save'),
+                ),
+              ]),
+            ),
+          ]),
+        );
+      }),
     );
   }
 
@@ -394,7 +402,7 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Row(children: [
         // Category dropdown
-        SizedBox(width: 130, child: Container(
+        Flexible(flex: 2, child: Container(
           height: 42,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(color: AppColors.surface2,
@@ -408,8 +416,8 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
           )),
         )),
         const SizedBox(width: 8),
-        // Description with autocomplete
-        Expanded(child: TextField(
+        // Amount field
+        Flexible(flex: 3, child: TextField(
           controller: widget.row.desc,
           focusNode: _focus,
           style: _kInputStyle,
@@ -472,10 +480,10 @@ class _DedBreakdownRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-    Expanded(child: TextField(controller: row.desc, style: _kInputStyle,
+    Expanded(flex: 3, child: TextField(controller: row.desc, style: _kInputStyle,
         decoration: _kDec('Deduction description'), onChanged: (_) => onChanged())),
     const SizedBox(width: 8),
-    SizedBox(width: 130, child: TextField(controller: row.amount,
+    Expanded(flex: 2, child: TextField(controller: row.amount,
         keyboardType: TextInputType.number, style: _kInputStyle,
         decoration: _kDec('Amount (₹)'), onChanged: (_) => onChanged())),
     const SizedBox(width: 6),
@@ -553,10 +561,18 @@ class _TwoCol extends StatelessWidget {
   final Widget left, right;
   const _TwoCol({required this.left, required this.right});
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [Expanded(child: left), const SizedBox(width: 12), Expanded(child: right)],
-  );
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
+    if (isMobile) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        left, const SizedBox(height: 10), right,
+      ]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Expanded(child: left), const SizedBox(width: 12), Expanded(child: right)],
+    );
+  }
 }
 
 class _FieldBlock extends StatelessWidget {

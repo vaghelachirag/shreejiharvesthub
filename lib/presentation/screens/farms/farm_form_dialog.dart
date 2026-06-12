@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/models.dart';
@@ -57,7 +58,7 @@ class _State extends ConsumerState<_FarmFormDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(child: Container(
-      width: 480, padding: const EdgeInsets.all(22),
+      width: (() { final sw = MediaQuery.of(context).size.width; return sw.isMobile ? sw * 0.96 : sw.isTablet ? sw * 0.75 : 480.0; })(), padding: const EdgeInsets.all(22),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.existing != null ? 'Edit Farm' : 'Add Farm',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),

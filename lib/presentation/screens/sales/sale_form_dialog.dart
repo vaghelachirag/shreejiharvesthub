@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers/app_data_provider.dart';
@@ -212,196 +213,200 @@ class _State extends ConsumerState<_SaleFormDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       backgroundColor: AppColors.surface,
-      child: SizedBox(
-        width: 580,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ── Title ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
-            child: Row(children: [
-              Text(
-                widget.existing != null ? 'Edit Sale Record' : 'Add Sale Record',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary, fontFamily: 'Sora'),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 16),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final sw = MediaQuery.of(context).size.width;
+        final dw = sw.isMobile ? sw * 0.96 : sw.isTablet ? sw * 0.82 : 580.0;
+        return SizedBox(width: dw,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // ── Title ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+              child: Row(children: [
+                Text(
+                  widget.existing != null ? 'Edit Sale Record' : 'Add Sale Record',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary, fontFamily: 'Sora'),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
 
-          // ── Body ──
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // ── Body ──
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-                // Row 1: Date picker + Buyer with autocomplete
-                _TwoCol(
-                  left: _FieldBlock(label: 'DATE',
-                    child: InkWell(
-                      onTap: _pickDate,
-                      child: Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface2,
-                          borderRadius: BorderRadius.circular(9),
-                          border: Border.all(color: AppColors.border2, width: 1.5),
+                  // Row 1: Date picker + Buyer with autocomplete
+                  _TwoCol(
+                    left: _FieldBlock(label: 'DATE',
+                      child: InkWell(
+                        onTap: _pickDate,
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface2,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(color: AppColors.border2, width: 1.5),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 15, color: AppColors.greenMid),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(displayDate,
+                                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora'))),
+                            const Icon(Icons.expand_more, size: 16, color: AppColors.textTertiary),
+                          ]),
                         ),
-                        child: Row(children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              size: 15, color: AppColors.greenMid),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(displayDate,
-                              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora'))),
-                          const Icon(Icons.expand_more, size: 16, color: AppColors.textTertiary),
-                        ]),
+                      ),
+                    ),
+                    right: _FieldBlock(label: 'BUYER NAME',
+                      child: _BuyerField(
+                        controller: _buyerCtrl,
+                        suggestions: _buyerSuggestions,
+                        onChanged: (_) => setState(() => _validationError = null),
                       ),
                     ),
                   ),
-                  right: _FieldBlock(label: 'BUYER NAME',
-                    child: _BuyerField(
-                      controller: _buyerCtrl,
-                      suggestions: _buyerSuggestions,
-                      onChanged: (_) => setState(() => _validationError = null),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // Row 2: Farm + Market
-                _TwoCol(
-                  left: _FieldBlock(label: 'FARM',
-                    child: _drop(
-                      value: _farmId.isEmpty ? null : _farmId,
-                      hint: '— Select farm —',
-                      items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
-                      onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }),
+                  // Row 2: Farm + Market
+                  _TwoCol(
+                    left: _FieldBlock(label: 'FARM',
+                      child: _drop(
+                        value: _farmId.isEmpty ? null : _farmId,
+                        hint: '— Select farm —',
+                        items: data.farms.map((f) => DropdownMenuItem(value: f.id, child: Text(f.name))).toList(),
+                        onChanged: (v) => setState(() { _farmId = v ?? ''; _mandiId = ''; _cropId = ''; }),
+                      ),
+                    ),
+                    right: _FieldBlock(label: 'MARKET',
+                      child: _drop(
+                        value: _mandiId.isEmpty ? null : _mandiId,
+                        hint: '— None —',
+                        items: farmMandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
+                        onChanged: (v) => setState(() => _mandiId = v ?? ''),
+                      ),
                     ),
                   ),
-                  right: _FieldBlock(label: 'MARKET',
-                    child: _drop(
-                      value: _mandiId.isEmpty ? null : _mandiId,
-                      hint: '— None —',
-                      items: farmMandis.map((m) => DropdownMenuItem(value: m.id, child: Text(m.name))).toList(),
-                      onChanged: (v) => setState(() => _mandiId = v ?? ''),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // Row 3: Crop + Payment
-                _TwoCol(
-                  left: _FieldBlock(label: 'CROP',
-                    child: _drop(
-                      value: _cropId.isEmpty ? null : _cropId,
-                      hint: '— None —',
-                      items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                      onChanged: (v) => setState(() => _cropId = v ?? ''),
+                  // Row 3: Crop + Payment
+                  _TwoCol(
+                    left: _FieldBlock(label: 'CROP',
+                      child: _drop(
+                        value: _cropId.isEmpty ? null : _cropId,
+                        hint: '— None —',
+                        items: farmCrops.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                        onChanged: (v) => setState(() => _cropId = v ?? ''),
+                      ),
+                    ),
+                    right: _FieldBlock(label: 'PAYMENT MODE',
+                      child: _drop(
+                        value: _payMode,
+                        hint: 'Cash',
+                        items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                        onChanged: (v) => setState(() => _payMode = v ?? 'Cash'),
+                      ),
                     ),
                   ),
-                  right: _FieldBlock(label: 'PAYMENT MODE',
-                    child: _drop(
-                      value: _payMode,
-                      hint: 'Cash',
-                      items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                      onChanged: (v) => setState(() => _payMode = v ?? 'Cash'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Stock breakdown header
-                Row(children: [
-                  const Text('STOCK BREAKDOWN (QTY × RATE × QUALITY)',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora')),
-                  const Spacer(),
-                  _AddRowBtn(onTap: _addRow),
+                  // Stock breakdown header
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                    const Flexible(child: Text('STOCK BREAKDOWN',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora'),
+                        overflow: TextOverflow.ellipsis)),
+                    const Spacer(),
+                    _AddRowBtn(onTap: _addRow),
+                  ]),
+                  const SizedBox(height: 8),
+
+                  // Breakdown rows
+                  ..._rows.asMap().entries.map((entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _BreakdownRow(
+                      row: entry.value,
+                      onRemove: _rows.length > 1 ? () => _removeRow(entry.key) : null,
+                      onChanged: () => setState(() {}),
+                    ),
+                  )),
+                  const SizedBox(height: 4),
+
+                  // Gross amount band
+                  _AmountBand(label: 'Gross Amount', amount: _grossAmount, isBold: true),
+                  const SizedBox(height: 12),
+
+                  // Deduction amount + description
+                  _TwoCol(
+                    left: _FieldBlock(label: 'DEDUCTION (₹)',
+                        child: _numField(_deductCtrl, '0')),
+                    right: _FieldBlock(label: 'DEDUCTION DESCRIPTION',
+                        child: TextField(
+                          controller: _deductDescCtrl,
+                          style: _kInputStyle,
+                          decoration: _kDec('e.g. Commission, Transport...'),
+                          onChanged: (_) => setState(() {}),
+                        )),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Net amount band
+                  _AmountBand(label: 'Net Amount Received', amount: _netAmount, isBold: true),
+                  const SizedBox(height: 16),
                 ]),
-                const SizedBox(height: 8),
+              ),
+            ),
 
-                // Breakdown rows
-                ..._rows.asMap().entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _BreakdownRow(
-                    row: entry.value,
-                    onRemove: _rows.length > 1 ? () => _removeRow(entry.key) : null,
-                    onChanged: () => setState(() {}),
-                  ),
-                )),
-                const SizedBox(height: 4),
-
-                // Gross amount band
-                _AmountBand(label: 'Gross Amount', amount: _grossAmount, isBold: true),
-                const SizedBox(height: 12),
-
-                // Deduction amount + description
-                _TwoCol(
-                  left: _FieldBlock(label: 'DEDUCTION (₹)',
-                      child: _numField(_deductCtrl, '0')),
-                  right: _FieldBlock(label: 'DEDUCTION DESCRIPTION',
-                      child: TextField(
-                        controller: _deductDescCtrl,
-                        style: _kInputStyle,
-                        decoration: _kDec('e.g. Commission, Transport...'),
-                        onChanged: (_) => setState(() {}),
-                      )),
+            // ── Validation error ──
+            if (_validationError != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.redPale,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.red.withOpacity(0.3)),
                 ),
-                const SizedBox(height: 10),
+                child: Row(children: [
+                  const Icon(Icons.error_outline, size: 15, color: AppColors.red),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_validationError!,
+                      style: const TextStyle(fontSize: 12, color: AppColors.red, fontWeight: FontWeight.w500, fontFamily: 'Sora'))),
+                ]),
+              ),
 
-                // Net amount band
-                _AmountBand(label: 'Net Amount Received', amount: _netAmount, isBold: true),
-                const SizedBox(height: 16),
-              ]),
-            ),
-          ),
-
-          // ── Validation error ──
-          if (_validationError != null)
+            // ── Footer ──
             Container(
-              margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.redPale,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: AppColors.red.withOpacity(0.3)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.error_outline, size: 15, color: AppColors.red),
-                const SizedBox(width: 8),
-                Expanded(child: Text(_validationError!,
-                    style: const TextStyle(fontSize: 12, color: AppColors.red, fontWeight: FontWeight.w500, fontFamily: 'Sora'))),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.border))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Sora')),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.greenMid,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'Sora'),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9))),
+                  onPressed: _save,
+                  child: const Text('Save'),
+                ),
               ]),
             ),
-
-          // ── Footer ──
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-            decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.border))),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Sora')),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.greenMid,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'Sora'),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9))),
-                onPressed: _save,
-                child: const Text('Save'),
-              ),
-            ]),
-          ),
-        ]),
-      ),
+          ]),
+        );
+      }),
     );
   }
 
@@ -547,10 +552,11 @@ class _BreakdownRow extends StatelessWidget {
           decoration: _kDec('Rate (₹)'),
           onChanged: (_) => onChanged(),
         )),
-        SizedBox(width: 82, child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(sub > 0 ? '= ₹${sub.toStringAsFixed(0)}' : '= —',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Sora')),
+        Flexible(child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(sub > 0 ? '=₹${sub.toStringAsFixed(0)}' : '—',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Sora'),
+              overflow: TextOverflow.ellipsis),
         )),
         GestureDetector(
           onTap: onRemove,
@@ -630,10 +636,18 @@ class _TwoCol extends StatelessWidget {
   final Widget left, right;
   const _TwoCol({required this.left, required this.right});
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [Expanded(child: left), const SizedBox(width: 12), Expanded(child: right)],
-  );
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
+    if (isMobile) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        left, const SizedBox(height: 10), right,
+      ]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Expanded(child: left), const SizedBox(width: 12), Expanded(child: right)],
+    );
+  }
 }
 
 class _FieldBlock extends StatelessWidget {

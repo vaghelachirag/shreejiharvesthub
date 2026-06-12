@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 
 // ── APP CARD ──────────────────────────────────────────────────────────────────
@@ -407,9 +408,10 @@ class SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sw = MediaQuery.of(context).size.width;
     return SizedBox(
       height: 34,
-      width: 160,
+      width: sw.isMobile ? sw * 0.55 : 160,
       child: TextField(
         controller: controller,
         onChanged: onChanged,
