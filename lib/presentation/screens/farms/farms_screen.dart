@@ -20,26 +20,44 @@ class FarmsScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── Header Section ───────────────────────────────────────────────────
-        Row(children: [
-          const Icon(Icons.agriculture_rounded, color: AppColors.greenMid, size: 28),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Farm Management',
-                style: t.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                    fontFamily: 'Sora')),
-            Text('Register and organize your cultivation areas',
-                style: t.labelMedium?.copyWith(
-                    color: AppColors.textTertiary,
-                    fontFamily: 'Sora')),
-          ]),
-          const Spacer(),
-          AddButton(
-            label: 'Add New Farm',
-            onTap: () => showFarmFormDialog(context, ref),
-          ),
-        ]),
+        Builder(builder: (context) {
+          final isMobile = MediaQuery.of(context).size.width.isMobile;
+          if (isMobile) {
+            return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              const Icon(Icons.agriculture_rounded, color: AppColors.greenMid, size: 22),
+              const SizedBox(width: 8),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Farm Management',
+                    style: t.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                        fontFamily: 'Sora')),
+                Text('Manage your farms',
+                    style: t.labelSmall?.copyWith(
+                        color: AppColors.textTertiary,
+                        fontFamily: 'Sora')),
+              ])),
+              AddButton(label: '+ Farm', onTap: () => showFarmFormDialog(context, ref)),
+            ]);
+          }
+          return Row(children: [
+            const Icon(Icons.agriculture_rounded, color: AppColors.greenMid, size: 28),
+            const SizedBox(width: 12),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Farm Management',
+                  style: t.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                      fontFamily: 'Sora')),
+              Text('Register and organize your cultivation areas',
+                  style: t.labelMedium?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontFamily: 'Sora')),
+            ]),
+            const Spacer(),
+            AddButton(label: 'Add New Farm', onTap: () => showFarmFormDialog(context, ref)),
+          ]);
+        }),
         const SizedBox(height: 24),
 
         // ── Grid ─────────────────────────────────────────────────────────────
@@ -56,34 +74,45 @@ class FarmsScreen extends ConsumerWidget {
         else
           Expanded(
             child: LayoutBuilder(builder: (context, constraints) {
+              final isMobile = MediaQuery.of(context).size.width.isMobile;
+              final farmWidgets = List.generate(data.farms.length, (i) {
+                final farm = data.farms[i];
+                final farmMandis = data.mandis.where((m) => m.farmId == farm.id).toList();
+                return _FarmCard(
+                  farm: farm,
+                  mandis: farmMandis,
+                  onEdit: () => showFarmFormDialog(context, ref, farm),
+                  onDelete: () async {
+                    final ok = await showConfirmDialog(context,
+                        message: 'Delete "${farm.name}"? This will also remove associated markets.');
+                    if (ok) ref.read(appDataProvider).deleteFarm(farm.id);
+                  },
+                  onAddMandi: () => showMandiFormDialog(context, ref, farm.id),
+                  onDeleteMandi: (mId) async {
+                    final ok = await showConfirmDialog(context, message: 'Delete this market?');
+                    if (ok) ref.read(appDataProvider).deleteMandi(mId);
+                  },
+                );
+              });
+
+              if (isMobile) {
+                return ListView.separated(
+                  itemCount: farmWidgets.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => SizedBox(height: 320, child: farmWidgets[i]),
+                );
+              }
+
               final cols = (constraints.maxWidth / 320).floor().clamp(1, 4);
               return GridView.builder(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 1.1, // Adjusted for more vertical content
+                  childAspectRatio: 1.1,
                 ),
                 itemCount: data.farms.length,
-                itemBuilder: (_, i) {
-                  final farm = data.farms[i];
-                  final farmMandis = data.mandis.where((m) => m.farmId == farm.id).toList();
-                  return _FarmCard(
-                    farm: farm,
-                    mandis: farmMandis,
-                    onEdit: () => showFarmFormDialog(context, ref, farm),
-                    onDelete: () async {
-                      final ok = await showConfirmDialog(context,
-                          message: 'Delete "${farm.name}"? This will also remove associated markets.');
-                      if (ok) ref.read(appDataProvider).deleteFarm(farm.id);
-                    },
-                    onAddMandi: () => showMandiFormDialog(context, ref, farm.id),
-                    onDeleteMandi: (mId) async {
-                      final ok = await showConfirmDialog(context, message: 'Delete this market?');
-                      if (ok) ref.read(appDataProvider).deleteMandi(mId);
-                    },
-                  );
-                },
+                itemBuilder: (_, i) => farmWidgets[i],
               );
             }),
           ),

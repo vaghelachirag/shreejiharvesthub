@@ -34,7 +34,7 @@ class DashboardFilter {
 }
 
 final dashboardFilterProvider =
-    StateProvider<DashboardFilter>((ref) => const DashboardFilter());
+StateProvider<DashboardFilter>((ref) => const DashboardFilter());
 
 // ── MAIN SHELL ────────────────────────────────────────────────────────────────
 class MainShell extends ConsumerWidget {
@@ -47,19 +47,19 @@ class MainShell extends ConsumerWidget {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width.isMobile;
 
-    Widget pageContent;
-    switch (page) {
-      case AppPage.dashboard:  pageContent = const DashboardScreen();  break;
-      case AppPage.sales:      pageContent = const SalesScreen();       break;
-      case AppPage.expenses:   pageContent = const ExpensesScreen();    break;
-      case AppPage.crops:      pageContent = const CropsScreen();       break;
-      case AppPage.markets:    pageContent = const MarketsScreen();     break;
-      case AppPage.farms:      pageContent = const FarmsScreen();       break;
-    }
+    // All pages stay mounted — no layout measurement issues during switching
+    const pages = [
+      DashboardScreen(),
+      SalesScreen(),
+      ExpensesScreen(),
+      CropsScreen(),
+      MarketsScreen(),
+      FarmsScreen(),
+    ];
+    final pageIndex = AppPage.values.indexOf(page);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      // ── Mobile: drawer-based navigation ──
       drawer: isMobile ? _NavDrawer() : null,
       body: SafeArea(
         child: Padding(
@@ -71,22 +71,9 @@ class MainShell extends ConsumerWidget {
               const _DateBar(),
               const SizedBox(height: 8),
               Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.015),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey(page),
-                    child: pageContent,
-                  ),
+                child: IndexedStack(
+                  index: pageIndex,
+                  children: pages,
                 ),
               ),
             ],
@@ -290,11 +277,11 @@ class _AppHeader extends ConsumerWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               ...navItems.map((item) => _NavButton(
-                    label: item.$2,
-                    isActive: page == item.$1,
-                    onTap: () =>
-                        ref.read(currentPageProvider.notifier).state = item.$1,
-                  )),
+                label: item.$2,
+                isActive: page == item.$1,
+                onTap: () =>
+                ref.read(currentPageProvider.notifier).state = item.$1,
+              )),
               const SizedBox(width: 4),
               _LogoutButton(onTap: () async {
                 final ok = await showConfirmDialog(context,
@@ -466,8 +453,8 @@ class _DatePickerButton extends StatelessWidget {
           firstDate: DateTime(2020), lastDate: DateTime(2030),
           builder: (context, child) => Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: AppColors.greenMid, onPrimary: Colors.white)),
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: AppColors.greenMid, onPrimary: Colors.white)),
             child: child!,
           ),
         );

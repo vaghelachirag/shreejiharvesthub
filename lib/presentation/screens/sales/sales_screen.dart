@@ -195,7 +195,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       child: DataTable(
                         headingRowHeight: 38,
                         dataRowMinHeight: 46,
-                        dataRowMaxHeight: 56,
+                        dataRowMaxHeight: double.infinity,
                         columnSpacing: 16,
                         horizontalMargin: 8,
                         dividerThickness: 0.8,
@@ -231,7 +231,24 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                               style: cellStyle,
                             )),
                             DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
-                            DataCell(Text(s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : 'Mixed', style: cellStyle)),
+                            DataCell(
+                              s.breakdown.length > 1
+                                  ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: s.breakdown.map((b) {
+                                  final lineAmt = b.qty * b.rate;
+                                  return Text(
+                                    '${AppUtils.formatNumber(b.qty)}kg × ₹${b.rate.toStringAsFixed(0)} = ${AppUtils.formatCurrency(lineAmt)}',
+                                    style: cellStyle.copyWith(fontSize: 11),
+                                  );
+                                }).toList(),
+                              )
+                                  : Text(
+                                s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : '—',
+                                style: cellStyle,
+                              ),
+                            ),
                             DataCell(Text(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '—', style: cellStyle)),
                             DataCell(Text(s.deductDesc.isNotEmpty ? s.deductDesc : '—', style: cellStyle)),
                             DataCell(AppBadge(

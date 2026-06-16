@@ -36,77 +36,83 @@ class DashboardScreen extends ConsumerWidget {
     final netProfit = totalSales - totalExp;
     final totalQty = sales.fold<double>(0, (s, r) => s + r.qty);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _DashboardFilterBar(),
-                const SizedBox(height: 16),
-                _MetricGrid(
-                  totalSales: totalSales, salesCount: sales.length,
-                  totalExp: totalExp, expCount: expenses.length,
-                  netProfit: netProfit, totalQty: totalQty,
-                ),
-                const SizedBox(height: 16),
-                Builder(builder: (context) {
-                  final isMobile = MediaQuery.of(context).size.width.isMobile;
-                  if (isMobile) {
-                    return Column(children: [
-                      _ExpenseBreakdownCard(expenses: expenses),
-                      const SizedBox(height: 12),
-                      _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms),
-                    ]);
-                  }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _ExpenseBreakdownCard(expenses: expenses)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms)),
-                    ],
-                  );
-                }),
-                const SizedBox(height: 16),
-                AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      CardTitle(
-                        title: 'Recent Activity',
-                        trailing: _PdfButton(
-                          onTap: () => _exportPdf(
-                            context: context,
-                            sales: sales,
-                            expenses: expenses,
-                            farms: data.farms,
-                            mandis: data.mandis,
-                            crops: data.crops,
-                            totalSales: totalSales,
-                            totalExp: totalExp,
-                            netProfit: netProfit,
-                            totalQty: totalQty,
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth,
+                maxWidth: constraints.maxWidth,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _DashboardFilterBar(),
+                  const SizedBox(height: 16),
+                  _MetricGrid(
+                    totalSales: totalSales, salesCount: sales.length,
+                    totalExp: totalExp, expCount: expenses.length,
+                    netProfit: netProfit, totalQty: totalQty,
+                  ),
+                  const SizedBox(height: 16),
+                  Builder(builder: (context) {
+                    final isMobile = MediaQuery.of(context).size.width.isMobile;
+                    if (isMobile) {
+                      return Column(children: [
+                        _ExpenseBreakdownCard(expenses: expenses),
+                        const SizedBox(height: 12),
+                        _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms),
+                      ]);
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _ExpenseBreakdownCard(expenses: expenses)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _FarmSummaryCard(sales: sales, expenses: expenses, farms: data.farms)),
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        CardTitle(
+                          title: 'Recent Activity',
+                          trailing: _PdfButton(
+                            onTap: () => _exportPdf(
+                              context: context,
+                              sales: sales,
+                              expenses: expenses,
+                              farms: data.farms,
+                              mandis: data.mandis,
+                              crops: data.crops,
+                              totalSales: totalSales,
+                              totalExp: totalExp,
+                              netProfit: netProfit,
+                              totalQty: totalQty,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _RecentActivityTable(
-                        sales: sales, expenses: expenses,
-                        farms: data.farms, mandis: data.mandis, crops: data.crops,
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        _RecentActivityTable(
+                          sales: sales, expenses: expenses,
+                          farms: data.farms, mandis: data.mandis, crops: data.crops,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-              ],
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -668,7 +674,7 @@ class _FarmSummaryCard extends StatelessWidget {
                 ),
               );
             }),
-            const Spacer(),
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.only(top: 8),
               child: Row(children: [
