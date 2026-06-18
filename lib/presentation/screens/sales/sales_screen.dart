@@ -16,7 +16,8 @@ import 'sale_form_dialog.dart';
 const _kPageSize = 10;
 
 class SalesScreen extends ConsumerStatefulWidget {
-  const SalesScreen({super.key});
+  final ScrollController? scrollController;
+  const SalesScreen({super.key, this.scrollController});
   @override
   ConsumerState<SalesScreen> createState() => _SalesScreenState();
 }
@@ -111,6 +112,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 if (isMobile) {
                   // ── Mobile: card list ──
                   return ListView.separated(
+                    controller: widget.scrollController,
                     itemCount: pageSales.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
@@ -150,10 +152,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                             _InfoChip(Icons.calendar_today_outlined, AppUtils.formatDate(s.date)),
                             if (farmName(s.farmId).isNotEmpty && farmName(s.farmId) != '—')
                               _InfoChip(Icons.agriculture_outlined, farmName(s.farmId)),
-                            if (mandiName(s.mandiId).isNotEmpty && mandiName(s.mandiId) != '—')
-                              _InfoChip(Icons.storefront_outlined, mandiName(s.mandiId)),
                             if (cropName(s.cropId).isNotEmpty && cropName(s.cropId) != '—')
                               _InfoChip(Icons.grass_outlined, cropName(s.cropId)),
+                            if (mandiName(s.mandiId).isNotEmpty && mandiName(s.mandiId) != '—')
+                              _InfoChip(Icons.storefront_outlined, mandiName(s.mandiId)),
                           ]),
                           const SizedBox(height: 8),
                           Row(children: [
@@ -192,6 +194,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                     constraints: BoxConstraints(minWidth: constraints.maxWidth),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,
+                      controller: widget.scrollController,
                       child: DataTable(
                         headingRowHeight: 38,
                         dataRowMinHeight: 46,
@@ -202,12 +205,12 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         headingRowColor: WidgetStateProperty.all(Colors.transparent),
                         columns: [
                           DataColumn(label: _TH('Date')),
-                          DataColumn(label: _TH('Buyer')),
                           DataColumn(label: _TH('Farm')),
-                          DataColumn(label: _TH('Market')),
                           DataColumn(label: _TH('Crop')),
-                          DataColumn(label: _TH('Quality')),
+                          DataColumn(label: _TH('Market')),
+                          DataColumn(label: _TH('Buyer')),
                           DataColumn(label: _TH('Qty (kg)'), numeric: true),
+                          DataColumn(label: _TH('Quality')),
                           DataColumn(label: _TH('Rate ₹/kg'), numeric: true),
                           DataColumn(label: _TH('Deduction'), numeric: true),
                           DataColumn(label: _TH('Deduct Desc')),
@@ -220,17 +223,17 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           st.contains(WidgetState.hovered) ? AppColors.greenPale : null),
                           cells: [
                             DataCell(Text(AppUtils.formatDate(s.date), style: cellStyle)),
-                            DataCell(Text(s.buyer, style: cellStyle.copyWith(fontWeight: FontWeight.w600))),
                             DataCell(Text(farmName(s.farmId), style: cellStyle)),
-                            DataCell(Text(mandiName(s.mandiId), style: cellStyle)),
                             DataCell(Text(cropName(s.cropId), style: cellStyle)),
+                            DataCell(Text(mandiName(s.mandiId), style: cellStyle)),
+                            DataCell(Text(s.buyer, style: cellStyle.copyWith(fontWeight: FontWeight.w600))),
+                            DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
                             DataCell(Text(
                               s.breakdown.isNotEmpty
                                   ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
                                   : '—',
                               style: cellStyle,
                             )),
-                            DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
                             DataCell(
                               s.breakdown.length > 1
                                   ? Column(
@@ -417,13 +420,13 @@ Future<Uint8List> _buildSalesPdf({
         border: pw.TableBorder.all(color: border, width: 0.5),
         columnWidths: {
           0: const pw.FlexColumnWidth(1.3),  // Date
-          1: const pw.FlexColumnWidth(1.6),  // Buyer
-          2: const pw.FlexColumnWidth(1.4),  // Farm
+          1: const pw.FlexColumnWidth(1.4),  // Farm
+          2: const pw.FlexColumnWidth(1.3),  // Crop
           3: const pw.FlexColumnWidth(1.4),  // Market
-          4: const pw.FlexColumnWidth(1.3),  // Crop
-          5: const pw.FlexColumnWidth(1.4),  // Quality
-          6: const pw.FlexColumnWidth(1.0),  // Qty
-          7: const pw.FlexColumnWidth(1.0),  // Rate
+          4: const pw.FlexColumnWidth(1.6),  // Buyer
+          5: const pw.FlexColumnWidth(1.0),  // Qty
+          6: const pw.FlexColumnWidth(1.4),  // Quality
+          7: const pw.FlexColumnWidth(2.2),  // Rate
           8: const pw.FlexColumnWidth(1.1),  // Deduction
           9: const pw.FlexColumnWidth(1.5),  // Deduct Desc
           10: const pw.FlexColumnWidth(1.0), // Payment
@@ -433,10 +436,10 @@ Future<Uint8List> _buildSalesPdf({
           pw.TableRow(
             decoration: pw.BoxDecoration(color: green),
             children: [
-              _th('Date', PdfColors.white),    _th('Buyer', PdfColors.white),
-              _th('Farm', PdfColors.white),    _th('Market', PdfColors.white),
-              _th('Crop', PdfColors.white),    _th('Quality', PdfColors.white),
-              _th('Qty (kg)', PdfColors.white), _th('Rate/kg', PdfColors.white),
+              _th('Date', PdfColors.white),    _th('Farm', PdfColors.white),
+              _th('Crop', PdfColors.white),    _th('Market', PdfColors.white),
+              _th('Buyer', PdfColors.white),   _th('Qty (kg)', PdfColors.white),
+              _th('Quality', PdfColors.white), _th('Rate/kg', PdfColors.white),
               _th('Deduction', PdfColors.white), _th('Deduct Desc', PdfColors.white),
               _th('Payment', PdfColors.white),  _th('Amount (Rs)', PdfColors.white),
             ],
@@ -446,15 +449,29 @@ Future<Uint8List> _buildSalesPdf({
             final bg = i.isOdd ? const PdfColor.fromInt(0xFFF9FAFB) : PdfColors.white;
             return pw.TableRow(decoration: pw.BoxDecoration(color: bg), children: [
               _td(AppUtils.formatDate(s.date)),
-              _td(s.buyer, bold: true),
               _td(farmName(s.farmId)),
-              _td(mandiName(s.mandiId)),
               _td(cropName(s.cropId)),
+              _td(mandiName(s.mandiId)),
+              _td(s.buyer, bold: true),
+              _tdRight(AppUtils.formatNumber(s.qty)),
               _td(s.breakdown.isNotEmpty
                   ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
                   : '-'),
-              _tdRight(AppUtils.formatNumber(s.qty)),
-              _tdRight(s.rate > 0 ? s.rate.toStringAsFixed(0) : 'Mixed'),
+              s.breakdown.length > 1
+                  ? pw.Padding(
+                padding: _cellPad,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: s.breakdown.map((b) {
+                    final lineAmt = b.qty * b.rate;
+                    return pw.Text(
+                      '${AppUtils.formatNumber(b.qty)}kg × ₹${b.rate.toStringAsFixed(0)} = ${AppUtils.formatCurrency(lineAmt)}',
+                      style: const pw.TextStyle(fontSize: 7, color: PdfColor.fromInt(0xFF111827)),
+                    );
+                  }).toList(),
+                ),
+              )
+                  : _tdRight(s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : '—'),
               _tdRight(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '-'),
               _td(s.deductDesc.isNotEmpty ? s.deductDesc : '-'),
               _td(s.payMode),

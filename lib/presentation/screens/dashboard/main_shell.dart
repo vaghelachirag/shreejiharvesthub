@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -37,24 +38,68 @@ final dashboardFilterProvider =
 StateProvider<DashboardFilter>((ref) => const DashboardFilter());
 
 // ── MAIN SHELL ────────────────────────────────────────────────────────────────
-class MainShell extends ConsumerWidget {
+class MainShell extends ConsumerStatefulWidget {
   final Widget child;
   const MainShell({super.key, required this.child});
+  @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+  final FocusNode _scrollFocus = FocusNode(debugLabel: 'PageScrollFocus');
+  late final List<ScrollController> _scrollCtrls =
+      List.generate(AppPage.values.length, (_) => ScrollController());
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void dispose() {
+    _scrollFocus.dispose();
+    for (final c in _scrollCtrls) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final ctrl = _scrollCtrls[AppPage.values.indexOf(ref.read(currentPageProvider))];
+    if (!ctrl.hasClients) return KeyEventResult.ignored;
+    final pos = ctrl.position;
+    double delta;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowDown:
+        delta = 60;
+        break;
+      case LogicalKeyboardKey.arrowUp:
+        delta = -60;
+        break;
+      case LogicalKeyboardKey.pageDown:
+        delta = pos.viewportDimension * 0.9;
+        break;
+      case LogicalKeyboardKey.pageUp:
+        delta = -pos.viewportDimension * 0.9;
+        break;
+      default:
+        return KeyEventResult.ignored;
+    }
+    final target = (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    ctrl.animateTo(target, duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final page  = ref.watch(currentPageProvider);
     final width = MediaQuery.of(context).size.width;
     final isMobile = width.isMobile;
 
     // All pages stay mounted — no layout measurement issues during switching
-    const pages = [
-      DashboardScreen(),
-      SalesScreen(),
-      ExpensesScreen(),
-      CropsScreen(),
-      MarketsScreen(),
-      FarmsScreen(),
+    final pages = [
+      DashboardScreen(scrollController: _scrollCtrls[0]),
+      SalesScreen(scrollController: _scrollCtrls[1]),
+      ExpensesScreen(scrollController: _scrollCtrls[2]),
+      CropsScreen(scrollController: _scrollCtrls[3]),
+      MarketsScreen(scrollController: _scrollCtrls[4]),
+      FarmsScreen(scrollController: _scrollCtrls[5]),
     ];
     final pageIndex = AppPage.values.indexOf(page);
 
@@ -62,21 +107,26 @@ class MainShell extends ConsumerWidget {
       backgroundColor: AppColors.bg,
       drawer: isMobile ? _NavDrawer() : null,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(isMobile ? 8 : 12),
-          child: Column(
-            children: [
-              _AppHeader(isMobile: isMobile),
-              const SizedBox(height: 8),
-              const _DateBar(),
-              const SizedBox(height: 8),
-              Expanded(
-                child: IndexedStack(
-                  index: pageIndex,
-                  children: pages,
+        child: Focus(
+          focusNode: _scrollFocus,
+          autofocus: true,
+          onKeyEvent: _onKey,
+          child: Padding(
+            padding: EdgeInsets.all(isMobile ? 8 : 12),
+            child: Column(
+              children: [
+                _AppHeader(isMobile: isMobile),
+                const SizedBox(height: 8),
+                const _DateBar(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: IndexedStack(
+                    index: pageIndex,
+                    children: pages,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -470,7 +520,7 @@ class _DatePickerButton extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.textSecondary),
           const SizedBox(width: 6),
-          Text(DateFormat('MM/dd/yyyy').format(date),
+          Text(DateFormat('dd/MM/yyyy').format(date),
               style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Sora')),
         ]),
       ),

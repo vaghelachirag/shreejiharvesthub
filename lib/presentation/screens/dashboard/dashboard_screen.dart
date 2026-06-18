@@ -12,11 +12,18 @@ import '../../../data/providers/app_data_provider.dart';
 import '../../widgets/common/common_widgets.dart';
 import 'main_shell.dart';
 
-class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({super.key});
+class DashboardScreen extends ConsumerStatefulWidget {
+  final ScrollController? scrollController;
+  const DashboardScreen({super.key, this.scrollController});
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  String _search = '';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final filter = ref.watch(dateFilterProvider);
     final dashFilter = ref.watch(dashboardFilterProvider);
     final data = ref.watch(appDataProvider);
@@ -41,6 +48,7 @@ class DashboardScreen extends ConsumerWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
+            controller: widget.scrollController,
             padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -83,25 +91,35 @@ class DashboardScreen extends ConsumerWidget {
                       children: [
                         CardTitle(
                           title: 'Recent Activity',
-                          trailing: _PdfButton(
-                            onTap: () => _exportPdf(
-                              context: context,
-                              sales: sales,
-                              expenses: expenses,
-                              farms: data.farms,
-                              mandis: data.mandis,
-                              crops: data.crops,
-                              totalSales: totalSales,
-                              totalExp: totalExp,
-                              netProfit: netProfit,
-                              totalQty: totalQty,
-                            ),
+                          trailing: Wrap(
+                            spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              SearchField(
+                                hint: 'Search activity...',
+                                onChanged: (v) => setState(() => _search = v),
+                              ),
+                              _PdfButton(
+                                onTap: () => _exportPdf(
+                                  context: context,
+                                  sales: sales,
+                                  expenses: expenses,
+                                  farms: data.farms,
+                                  mandis: data.mandis,
+                                  crops: data.crops,
+                                  totalSales: totalSales,
+                                  totalExp: totalExp,
+                                  netProfit: netProfit,
+                                  totalQty: totalQty,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
                         _RecentActivityTable(
                           sales: sales, expenses: expenses,
                           farms: data.farms, mandis: data.mandis, crops: data.crops,
+                          search: _search,
                         ),
                       ],
                     ),
@@ -193,11 +211,11 @@ Future<Uint8List> _buildPdf({
 
   final combined = [
     ...sales.map((s) => _PdfRow(
-        date: s.date, desc: s.buyer, farm: fName(s.farmId),
+        date: s.date, category: s.buyer, desc: s.deductDesc, farm: fName(s.farmId),
         mandi: mName(s.mandiId), crop: cName(s.cropId),
         qty: s.qty, amount: s.amount, isSale: true)),
     ...expenses.map((e) => _PdfRow(
-        date: e.date, desc: e.desc, farm: fName(e.farmId),
+        date: e.date, category: e.cat, desc: e.desc, farm: fName(e.farmId),
         mandi: mName(e.mandiId), crop: cName(e.cropId),
         qty: 0, amount: e.amount, isSale: false)),
   ]..sort((a, b) => b.date.compareTo(a.date));
@@ -337,36 +355,38 @@ Future<Uint8List> _buildPdf({
           pw.Table(
             border: pw.TableBorder.all(color: border, width: 0.5),
             columnWidths: {
-              0: const pw.FlexColumnWidth(1.4),
-              1: const pw.FlexColumnWidth(2),
-              2: const pw.FlexColumnWidth(1.5),
-              3: const pw.FlexColumnWidth(1.5),
-              4: const pw.FlexColumnWidth(1.5),
-              5: const pw.FlexColumnWidth(1.2),
-              6: const pw.FlexColumnWidth(1.5),
-              7: const pw.FlexColumnWidth(1),
+              0: const pw.FlexColumnWidth(1.3), // Date
+              1: const pw.FlexColumnWidth(1.4), // Farm
+              2: const pw.FlexColumnWidth(1.3), // Crop
+              3: const pw.FlexColumnWidth(1.4), // Market
+              4: const pw.FlexColumnWidth(1.6), // Buyer/Category
+              5: const pw.FlexColumnWidth(1.0), // Qty
+              6: const pw.FlexColumnWidth(1.8), // Description
+              7: const pw.FlexColumnWidth(0.9), // Type
+              8: const pw.FlexColumnWidth(1.3), // Amount
             },
             children: [
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF0FDF4)),
                 children: [
-                  _pdfTH('Date'), _pdfTH('Description'), _pdfTH('Farm'),
-                  _pdfTH('Market'), _pdfTH('Crop'), _pdfTH('Qty (kg)'),
-                  _pdfTH('Amount (Rs)'), _pdfTH('Type'),
+                  _pdfTH('Date'), _pdfTH('Farm'), _pdfTH('Crop'),
+                  _pdfTH('Market'), _pdfTH('Buyer/Category'), _pdfTH('Qty (kg)'),
+                  _pdfTH('Description'), _pdfTH('Type'), _pdfTH('Amount (Rs)'),
                 ],
               ),
               ...combined.map((row) => pw.TableRow(children: [
                 _pdfTD(AppUtils.formatDate(row.date)),
-                _pdfTD(row.desc),
                 _pdfTD(row.farm),
-                _pdfTD(row.mandi),
                 _pdfTD(row.crop),
+                _pdfTD(row.mandi),
+                _pdfTD(row.category),
                 _pdfTD(row.qty > 0 ? AppUtils.formatNumber(row.qty) : '-'),
+                _pdfTD(row.desc.isNotEmpty ? row.desc : '-'),
+                _pdfTDBadge(row.isSale ? 'Sale' : 'Exp', row.isSale ? green : amber),
                 _pdfTDColor(
                   (row.isSale ? '+' : '-') + AppUtils.formatCurrency(row.amount),
                   row.isSale ? green : red,
                 ),
-                _pdfTDBadge(row.isSale ? 'Sale' : 'Exp', row.isSale ? green : amber),
               ])),
             ],
           ),
@@ -446,13 +466,13 @@ pw.Widget _pdfTDBadge(String text, PdfColor color) {
 }
 
 class _PdfRow {
-  final String date, desc, farm, mandi, crop;
+  final String date, category, desc, farm, mandi, crop;
   final double qty, amount;
   final bool isSale;
   const _PdfRow({
-    required this.date, required this.desc, required this.farm,
-    required this.mandi, required this.crop, required this.qty,
-    required this.amount, required this.isSale,
+    required this.date, required this.category, required this.desc,
+    required this.farm, required this.mandi, required this.crop,
+    required this.qty, required this.amount, required this.isSale,
   });
 }
 
@@ -811,10 +831,11 @@ class _RecentActivityTable extends StatelessWidget {
   final List<Farm> farms;
   final List<Mandi> mandis;
   final List<Crop> crops;
+  final String search;
 
   const _RecentActivityTable({
     required this.sales, required this.expenses, required this.farms,
-    required this.mandis, required this.crops,
+    required this.mandis, required this.crops, this.search = '',
   });
 
   String _farmName(String id)  => AppUtils.farmName(farms, id);
@@ -823,16 +844,26 @@ class _RecentActivityTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final combined = [
+    var combined = [
       ...sales.map((s) => _ActivityRow(
-          date: s.date, description: s.buyer, farmId: s.farmId,
+          date: s.date, category: s.buyer, description: s.deductDesc, farmId: s.farmId,
           mandiId: s.mandiId, cropId: s.cropId, qty: s.qty,
           amount: s.amount, isSale: true)),
       ...expenses.map((e) => _ActivityRow(
-          date: e.date, description: e.desc, farmId: e.farmId,
+          date: e.date, category: e.cat, description: e.desc, farmId: e.farmId,
           mandiId: e.mandiId, cropId: e.cropId, qty: 0,
           amount: e.amount, isSale: false)),
     ]..sort((a, b) => b.date.compareTo(a.date));
+
+    if (search.isNotEmpty) {
+      final q = search.toLowerCase();
+      combined = combined.where((row) =>
+          row.category.toLowerCase().contains(q) ||
+          row.description.toLowerCase().contains(q) ||
+          _farmName(row.farmId).toLowerCase().contains(q) ||
+          _mandiName(row.mandiId).toLowerCase().contains(q) ||
+          _cropName(row.cropId).toLowerCase().contains(q)).toList();
+    }
 
     if (combined.isEmpty) {
       return const EmptyState(icon: '📋', title: 'No activity for this period');
@@ -855,13 +886,14 @@ class _RecentActivityTable extends StatelessWidget {
               headingRowColor: WidgetStateProperty.all(Colors.transparent),
               columns: const [
                 DataColumn(label: _TH('Date')),
-                DataColumn(label: _TH('Description')),
                 DataColumn(label: _TH('Farm')),
-                DataColumn(label: _TH('Market')),
                 DataColumn(label: _TH('Crop')),
+                DataColumn(label: _TH('Market')),
+                DataColumn(label: _TH('Buyer/Category')),
                 DataColumn(label: _TH('Qty (kg)'), numeric: true),
-                DataColumn(label: _TH('Amount (₹)'), numeric: true),
+                DataColumn(label: _TH('Description')),
                 DataColumn(label: _TH('Type')),
+                DataColumn(label: _TH('Amount (₹)'), numeric: true),
               ],
               rows: combined.map((row) => DataRow(
                 color: WidgetStateProperty.resolveWith((states) {
@@ -870,21 +902,22 @@ class _RecentActivityTable extends StatelessWidget {
                 }),
                 cells: [
                   DataCell(Text(AppUtils.formatDate(row.date), style: cellStyle)),
-                  DataCell(Text(row.description, style: cellStyle.copyWith(fontWeight: FontWeight.w500))),
                   DataCell(Text(_farmName(row.farmId), style: cellStyle)),
-                  DataCell(Text(_mandiName(row.mandiId), style: cellStyle)),
                   DataCell(Text(_cropName(row.cropId), style: cellStyle)),
+                  DataCell(Text(_mandiName(row.mandiId), style: cellStyle)),
+                  DataCell(Text(row.category, style: cellStyle.copyWith(fontWeight: FontWeight.w500))),
                   DataCell(Text(row.qty > 0 ? AppUtils.formatNumber(row.qty) : '—',
                       style: cellStyle.copyWith(fontFamily: 'monospace'))),
+                  DataCell(Text(row.description.isNotEmpty ? row.description : '—', style: cellStyle)),
+                  DataCell(AppBadge(
+                    label: row.isSale ? 'Sale' : 'Expense',
+                    variant: row.isSale ? BadgeVariant.green : BadgeVariant.amber,
+                  )),
                   DataCell(Text(
                     (row.isSale ? '' : '-') + AppUtils.formatCurrency(row.amount),
                     style: cellStyle.copyWith(
                         fontWeight: FontWeight.w700,
                         color: row.isSale ? AppColors.greenMid : AppColors.red),
-                  )),
-                  DataCell(AppBadge(
-                    label: row.isSale ? 'Sale' : 'Expense',
-                    variant: row.isSale ? BadgeVariant.green : BadgeVariant.amber,
                   )),
                 ],
               )).toList(),
@@ -897,13 +930,13 @@ class _RecentActivityTable extends StatelessWidget {
 }
 
 class _ActivityRow {
-  final String date, description, farmId, mandiId, cropId;
+  final String date, category, description, farmId, mandiId, cropId;
   final double qty, amount;
   final bool isSale;
   const _ActivityRow({
-    required this.date, required this.description, required this.farmId,
-    required this.mandiId, required this.cropId, required this.qty,
-    required this.amount, required this.isSale,
+    required this.date, required this.category, required this.description,
+    required this.farmId, required this.mandiId, required this.cropId,
+    required this.qty, required this.amount, required this.isSale,
   });
 }
 

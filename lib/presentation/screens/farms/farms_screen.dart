@@ -9,7 +9,8 @@ import 'farm_form_dialog.dart';
 import '../sales/sale_form_dialog.dart';
 
 class FarmsScreen extends ConsumerWidget {
-  const FarmsScreen({super.key});
+  final ScrollController? scrollController;
+  const FarmsScreen({super.key, this.scrollController});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -97,6 +98,7 @@ class FarmsScreen extends ConsumerWidget {
 
               if (isMobile) {
                 return ListView.separated(
+                  controller: scrollController,
                   itemCount: farmWidgets.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (_, i) => SizedBox(height: 320, child: farmWidgets[i]),
@@ -105,6 +107,7 @@ class FarmsScreen extends ConsumerWidget {
 
               final cols = (constraints.maxWidth / 320).floor().clamp(1, 4);
               return GridView.builder(
+                controller: scrollController,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: cols,
                   crossAxisSpacing: 16,

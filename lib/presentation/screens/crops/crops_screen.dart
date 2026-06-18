@@ -8,7 +8,8 @@ import '../../../data/providers/app_data_provider.dart';
 import '../../widgets/common/common_widgets.dart';
 
 class CropsScreen extends ConsumerStatefulWidget {
-  const CropsScreen({super.key});
+  final ScrollController? scrollController;
+  const CropsScreen({super.key, this.scrollController});
   @override
   ConsumerState<CropsScreen> createState() => _State();
 }
@@ -48,6 +49,7 @@ class _State extends ConsumerState<CropsScreen> {
               : LayoutBuilder(builder: (context, constraints) {
             final cols = (constraints.maxWidth / 290).floor().clamp(1, 4);
             return GridView.builder(
+              controller: widget.scrollController,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: cols,
                 crossAxisSpacing: 12, mainAxisSpacing: 12,
@@ -292,7 +294,7 @@ class _CropCard extends StatelessWidget {
             const SizedBox(height: 10),
             // Dates
             Row(children: [
-              Expanded(child: _DateBox(label: 'SOWN', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
+              Expanded(child: _DateBox(label: 'PLANTATION', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
               const SizedBox(width: 8),
               Expanded(child: _DateBox(label: 'HARVEST', value: crop.end.isNotEmpty ? AppUtils.formatDate(crop.end) : '—')),
             ]),

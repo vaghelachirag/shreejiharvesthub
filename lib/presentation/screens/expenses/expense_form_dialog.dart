@@ -26,13 +26,6 @@ class _ExpRow {
   void dispose() { desc.dispose(); amount.dispose(); }
 }
 
-class _DedRow {
-  final TextEditingController desc   = TextEditingController();
-  final TextEditingController amount = TextEditingController();
-  double get amt => double.tryParse(amount.text) ?? 0;
-  void dispose() { desc.dispose(); amount.dispose(); }
-}
-
 // ── DIALOG ────────────────────────────────────────────────────────────────────
 class _ExpenseFormDialog extends ConsumerStatefulWidget {
   final Expense? existing;
@@ -51,11 +44,8 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
   String? _validationError;
 
   final List<_ExpRow> _expRows = [];
-  final List<_DedRow> _dedRows = [];
 
   double get _totalExpense  => _expRows.fold(0.0, (s, r) => s + r.amt);
-  double get _totalDed      => _dedRows.fold(0.0, (s, r) => s + r.amt);
-  double get _netExpense    => _totalExpense - _totalDed;
 
   // ── Desc suggestions from existing expenses ───────────────────────────────
   List<String> _descSuggestions(String query) {
@@ -87,13 +77,13 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
       _farmId = data.farms.isNotEmpty ? data.farms.first.id : '';
       _expRows.add(_ExpRow(defaultCat));
     }
-    _dedRows.add(_DedRow());
   }
 
   @override
   void dispose() {
-    for (final r in _expRows) r.dispose();
-    for (final r in _dedRows) r.dispose();
+    for (final r in _expRows) {
+      r.dispose();
+    }
     super.dispose();
   }
 
@@ -104,8 +94,6 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
 
   void _addExpRow() => setState(() => _expRows.add(_ExpRow(_defaultCat())));
   void _removeExpRow(int i) { _expRows[i].dispose(); setState(() => _expRows.removeAt(i)); }
-  void _addDedRow()  => setState(() => _dedRows.add(_DedRow()));
-  void _removeDedRow(int i) { _dedRows[i].dispose(); setState(() => _dedRows.removeAt(i)); }
 
   // ── Date picker ───────────────────────────────────────────────────────────
   Future<void> _pickDate() async {
@@ -151,7 +139,7 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
       notifier.updateExpense(widget.existing!.copyWith(
         date: _date,
         desc: r.desc.text.trim().isEmpty ? r.cat : r.desc.text.trim(),
-        cat: r.cat, amount: _netExpense,
+        cat: r.cat, amount: _totalExpense,
         farmId: _farmId, mandiId: _mandiId, cropId: _cropId, payMode: _payMode,
       ));
     } else {
@@ -273,31 +261,7 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
                   ),
                 )),
                 const SizedBox(height: 4),
-                _AmountBand(label: 'Total Expense Amount', amount: _totalExpense, color: AppColors.greenMid),
-                const SizedBox(height: 16),
-
-                // ── Deduction Breakdown ──
-                Row(children: [
-                  const Flexible(child: Text('DEDUCTION BREAKDOWN',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary, letterSpacing: 0.05, fontFamily: 'Sora'),
-                      overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 8),
-                  _AddRowBtn(onTap: _addDedRow),
-                ]),
-                const SizedBox(height: 8),
-                ..._dedRows.asMap().entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _DedBreakdownRow(
-                    row: entry.value,
-                    onRemove: _dedRows.length > 1 ? () => _removeDedRow(entry.key) : null,
-                    onChanged: () => setState(() {}),
-                  ),
-                )),
-                const SizedBox(height: 4),
-                _AmountBand(label: 'Total Deduction', amount: _totalDed, color: AppColors.amber),
-                const SizedBox(height: 8),
-                _AmountBand(label: 'Net Expense Amount', amount: _netExpense, color: AppColors.greenMid, bold: true),
+                _AmountBand(label: 'Total Expense Amount', amount: _totalExpense, color: AppColors.greenMid, bold: true),
                 const SizedBox(height: 16),
               ]),
             )),
@@ -469,26 +433,6 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
         ),
     ]);
   }
-}
-
-// ── DEDUCTION ROW ─────────────────────────────────────────────────────────────
-class _DedBreakdownRow extends StatelessWidget {
-  final _DedRow row;
-  final VoidCallback? onRemove;
-  final VoidCallback onChanged;
-  const _DedBreakdownRow({required this.row, required this.onRemove, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Expanded(flex: 3, child: TextField(controller: row.desc, style: _kInputStyle,
-        decoration: _kDec('Deduction description'), onChanged: (_) => onChanged())),
-    const SizedBox(width: 8),
-    Expanded(flex: 2, child: TextField(controller: row.amount,
-        keyboardType: TextInputType.number, style: _kInputStyle,
-        decoration: _kDec('Amount (₹)'), onChanged: (_) => onChanged())),
-    const SizedBox(width: 6),
-    _RemoveBtn(onTap: onRemove),
-  ]);
 }
 
 // ── AMOUNT BAND ───────────────────────────────────────────────────────────────

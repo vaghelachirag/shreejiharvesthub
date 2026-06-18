@@ -7,7 +7,8 @@ import '../../../data/providers/app_data_provider.dart';
 import '../../widgets/common/common_widgets.dart';
 
 class MarketsScreen extends ConsumerStatefulWidget {
-  const MarketsScreen({super.key});
+  final ScrollController? scrollController;
+  const MarketsScreen({super.key, this.scrollController});
   @override
   ConsumerState<MarketsScreen> createState() => _State();
 }
@@ -73,6 +74,7 @@ class _State extends ConsumerState<MarketsScreen> {
               : LayoutBuilder(builder: (context, constraints) {
                   final cols = (constraints.maxWidth / 300).floor().clamp(1, 4);
                   return GridView.builder(
+                    controller: widget.scrollController,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: cols,
                       crossAxisSpacing: 16,

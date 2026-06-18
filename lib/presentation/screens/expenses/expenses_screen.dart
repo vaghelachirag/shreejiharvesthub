@@ -16,7 +16,8 @@ import 'expense_form_dialog.dart';
 const _kPageSize = 10;
 
 class ExpensesScreen extends ConsumerStatefulWidget {
-  const ExpensesScreen({super.key});
+  final ScrollController? scrollController;
+  const ExpensesScreen({super.key, this.scrollController});
   @override
   ConsumerState<ExpensesScreen> createState() => _State();
 }
@@ -120,6 +121,7 @@ class _State extends ConsumerState<ExpensesScreen> {
                 final isMobile = MediaQuery.of(context).size.width.isMobile;
                 if (isMobile) {
                   return ListView.separated(
+                    controller: widget.scrollController,
                     itemCount: pageExp.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
@@ -153,10 +155,10 @@ class _State extends ConsumerState<ExpensesScreen> {
                             _InfoChip(Icons.calendar_today_outlined, AppUtils.formatDate(e.date)),
                             if (farmName(e.farmId).isNotEmpty && farmName(e.farmId) != '—')
                               _InfoChip(Icons.agriculture_outlined, farmName(e.farmId)),
-                            if (mandiName(e.mandiId).isNotEmpty && mandiName(e.mandiId) != '—')
-                              _InfoChip(Icons.storefront_outlined, mandiName(e.mandiId)),
                             if (cropName(e.cropId).isNotEmpty && cropName(e.cropId) != '—')
                               _InfoChip(Icons.grass_outlined, cropName(e.cropId)),
+                            if (mandiName(e.mandiId).isNotEmpty && mandiName(e.mandiId) != '—')
+                              _InfoChip(Icons.storefront_outlined, mandiName(e.mandiId)),
                           ]),
                           const SizedBox(height: 8),
                           Row(children: [
@@ -182,6 +184,7 @@ class _State extends ConsumerState<ExpensesScreen> {
                     constraints: BoxConstraints(minWidth: constraints.maxWidth),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,
+                      controller: widget.scrollController,
                       child: DataTable(
                         headingRowHeight: 38,
                         dataRowMinHeight: 46,
@@ -192,11 +195,11 @@ class _State extends ConsumerState<ExpensesScreen> {
                         headingRowColor: WidgetStateProperty.all(Colors.transparent),
                         columns: [
                           DataColumn(label: _TH('Date')),
-                          DataColumn(label: _TH('Description')),
-                          DataColumn(label: _TH('Category')),
                           DataColumn(label: _TH('Farm')),
-                          DataColumn(label: _TH('Market')),
                           DataColumn(label: _TH('Crop')),
+                          DataColumn(label: _TH('Market')),
+                          DataColumn(label: _TH('Category')),
+                          DataColumn(label: _TH('Description')),
                           DataColumn(label: _TH('Payment')),
                           DataColumn(label: _TH('Amount (₹)'), numeric: true),
                           DataColumn(label: _TH('')),
@@ -206,14 +209,14 @@ class _State extends ConsumerState<ExpensesScreen> {
                           st.contains(WidgetState.hovered) ? AppColors.amberPale.withOpacity(0.4) : null),
                           cells: [
                             DataCell(Text(AppUtils.formatDate(e.date), style: cellStyle)),
+                            DataCell(Text(farmName(e.farmId), style: cellStyle)),
+                            DataCell(Text(cropName(e.cropId), style: cellStyle)),
+                            DataCell(Text(mandiName(e.mandiId), style: cellStyle)),
+                            DataCell(AppBadge(label: e.cat, variant: BadgeVariant.amber)),
                             DataCell(SizedBox(width: 160,
                                 child: Text(e.desc,
                                     style: cellStyle.copyWith(fontWeight: FontWeight.w600),
                                     overflow: TextOverflow.ellipsis))),
-                            DataCell(AppBadge(label: e.cat, variant: BadgeVariant.amber)),
-                            DataCell(Text(farmName(e.farmId), style: cellStyle)),
-                            DataCell(Text(mandiName(e.mandiId), style: cellStyle)),
-                            DataCell(Text(cropName(e.cropId), style: cellStyle)),
                             DataCell(AppBadge(label: e.payMode,
                                 variant: e.payMode == 'Cash'     ? BadgeVariant.green
                                     : e.payMode == 'Online'  ? BadgeVariant.blue
@@ -424,15 +427,19 @@ Future<Uint8List> _buildExpensesPdf({
       pw.Table(
         border: pw.TableBorder.all(color: border, width: 0.5),
         columnWidths: {
-          0: const pw.FlexColumnWidth(1.4), 1: const pw.FlexColumnWidth(2.2),
-          2: const pw.FlexColumnWidth(1.4), 3: const pw.FlexColumnWidth(1.6),
-          4: const pw.FlexColumnWidth(1.5), 5: const pw.FlexColumnWidth(1.5),
-          6: const pw.FlexColumnWidth(1.2), 7: const pw.FlexColumnWidth(1.5),
+          0: const pw.FlexColumnWidth(1.4), // Date
+          1: const pw.FlexColumnWidth(1.6), // Farm
+          2: const pw.FlexColumnWidth(1.5), // Crop
+          3: const pw.FlexColumnWidth(1.5), // Market
+          4: const pw.FlexColumnWidth(1.4), // Category
+          5: const pw.FlexColumnWidth(2.2), // Description
+          6: const pw.FlexColumnWidth(1.2), // Payment
+          7: const pw.FlexColumnWidth(1.5), // Amount
         },
         children: [
           pw.TableRow(decoration: pw.BoxDecoration(color: amber), children: [
-            _expTh('Date'), _expTh('Description'), _expTh('Category'),
-            _expTh('Farm'), _expTh('Market'), _expTh('Crop'),
+            _expTh('Date'), _expTh('Farm'), _expTh('Crop'),
+            _expTh('Market'), _expTh('Category'), _expTh('Description'),
             _expTh('Payment'), _expTh('Amount (Rs)'),
           ]),
           ...expenses.asMap().entries.map((entry) {
@@ -440,11 +447,11 @@ Future<Uint8List> _buildExpensesPdf({
             final bg = i.isOdd ? const PdfColor.fromInt(0xFFF9FAFB) : PdfColors.white;
             return pw.TableRow(decoration: pw.BoxDecoration(color: bg), children: [
               _expTd(AppUtils.formatDate(e.date)),
-              _expTd(e.desc, bold: true),
-              _expTd(e.cat),
               _expTd(farmName(e.farmId)),
-              _expTd(mandiName(e.mandiId)),
               _expTd(cropName(e.cropId)),
+              _expTd(mandiName(e.mandiId)),
+              _expTd(e.cat),
+              _expTd(e.desc, bold: true),
               _expTd(e.payMode),
               _expTdAmt(AppUtils.formatCurrency(e.amount), amber),
             ]);
