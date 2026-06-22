@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -107,7 +108,12 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           ]))
               : Column(children: [
             Expanded(
-              child: LayoutBuilder(builder: (context, constraints) {
+              child: Shortcuts(
+                shortcuts: const <ShortcutActivator, Intent>{
+                  SingleActivator(LogicalKeyboardKey.arrowUp): ScrollIntent(direction: AxisDirection.up),
+                  SingleActivator(LogicalKeyboardKey.arrowDown): ScrollIntent(direction: AxisDirection.down),
+                },
+                child: LayoutBuilder(builder: (context, constraints) {
                 final isMobile = MediaQuery.of(context).size.width.isMobile;
                 if (isMobile) {
                   // ── Mobile: card list ──
@@ -286,6 +292,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   ),
                 );
               }),
+              ),
             ),
             Container(
               width: double.infinity,

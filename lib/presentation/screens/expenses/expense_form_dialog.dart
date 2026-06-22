@@ -214,7 +214,7 @@ class _State extends ConsumerState<_ExpenseFormDialog> {
                   ),
                   right: _FieldBlock(label: 'PAYMENT MODE',
                       child: _drop(value: _payMode, hint: 'Cash',
-                          items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                          items: ['Cash','Online','Bank','Angadia'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                           onChanged: (v) => setState(() => _payMode = v ?? 'Cash'))),
                 ),
                 const SizedBox(height: 12),

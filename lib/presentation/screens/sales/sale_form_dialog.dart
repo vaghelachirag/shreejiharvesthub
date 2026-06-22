@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_constants.dart';
@@ -42,6 +43,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
   final _buyerCtrl      = TextEditingController();
   final _deductCtrl     = TextEditingController();
   final _deductDescCtrl = TextEditingController();
+  final _scrollCtrl     = ScrollController();
 
   // State
   String _date    = '';
@@ -76,6 +78,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_handleHardwareKey);
     final data = widget.outerRef.read(appDataProvider);
     final e = widget.existing;
     if (e != null) {
@@ -111,9 +114,25 @@ class _State extends ConsumerState<_SaleFormDialog> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     _buyerCtrl.dispose(); _deductCtrl.dispose(); _deductDescCtrl.dispose();
+    _scrollCtrl.dispose();
     for (final r in _rows) r.dispose();
     super.dispose();
+  }
+
+  // Arrow keys move focus to/from text fields and never bubble to a Shortcuts
+  // ancestor, so scroll the dialog directly off the raw hardware key stream.
+  bool _handleHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (!_scrollCtrl.hasClients) return false;
+    const step = 60.0;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _scrollCtrl.jumpTo((_scrollCtrl.offset + step).clamp(0.0, _scrollCtrl.position.maxScrollExtent));
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _scrollCtrl.jumpTo((_scrollCtrl.offset - step).clamp(0.0, _scrollCtrl.position.maxScrollExtent));
+    }
+    return false;
   }
 
   void _addRow() => setState(() => _rows.add(_BdRow()));
@@ -234,6 +253,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
             // ── Body ──
             Flexible(
               child: SingleChildScrollView(
+                controller: _scrollCtrl,
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
@@ -306,7 +326,7 @@ class _State extends ConsumerState<_SaleFormDialog> {
                       child: _drop(
                         value: _payMode,
                         hint: 'Cash',
-                        items: ['Cash','Online','Bank','Agnadiyu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                        items: ['Cash','Online','Bank','Angadia'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                         onChanged: (v) => setState(() => _payMode = v ?? 'Cash'),
                       ),
                     ),
@@ -532,32 +552,31 @@ class _BreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sub = row.sub;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(flex: 5, child: TextField(
+    return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(flex: 3, child: TextField(
           controller: row.qty,
           keyboardType: TextInputType.number,
           style: _kInputStyle,
           decoration: _kDec('Qty (kg)'),
           onChanged: (_) => onChanged(),
         )),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Text('×', style: TextStyle(fontSize: 16, color: AppColors.textTertiary, fontFamily: 'Sora')),
-        ),
-        Expanded(flex: 5, child: TextField(
+        const SizedBox(width: 6),
+        Expanded(flex: 3, child: TextField(
           controller: row.rate,
           keyboardType: TextInputType.number,
           style: _kInputStyle,
           decoration: _kDec('Rate (₹)'),
           onChanged: (_) => onChanged(),
         )),
-        Flexible(child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(sub > 0 ? '=₹${sub.toStringAsFixed(0)}' : '—',
-              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Sora'),
-              overflow: TextOverflow.ellipsis),
+        const SizedBox(width: 6),
+        Expanded(flex: 4, child: TextField(
+          controller: row.quality,
+          style: _kInputStyle,
+          decoration: _kDec('Quality'),
+          onChanged: (_) => onChanged(),
         )),
+        const SizedBox(width: 6),
         GestureDetector(
           onTap: onRemove,
           child: AnimatedContainer(
@@ -573,12 +592,10 @@ class _BreakdownRow extends StatelessWidget {
           ),
         ),
       ]),
-      const SizedBox(height: 6),
-      TextField(
-        controller: row.quality,
-        style: _kInputStyle,
-        decoration: _kDec('Quality (e.g. A Grade, Premium, Mixed...)'),
-        onChanged: (_) => onChanged(),
+      if (sub > 0) Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('= ₹${sub.toStringAsFixed(0)}',
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'Sora')),
       ),
     ]);
   }

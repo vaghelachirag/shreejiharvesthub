@@ -103,7 +103,7 @@ class _State extends ConsumerState<CropsScreen> {
           )),
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: _fld('Start Date', _DatePickerField(
+            Expanded(child: _fld('Plantation Date', _DatePickerField(
               controller: startCtrl,
               hint: 'YYYY-MM-DD',
               onPick: () async {
@@ -119,7 +119,7 @@ class _State extends ConsumerState<CropsScreen> {
               },
             ))),
             const SizedBox(width: 10),
-            Expanded(child: _fld('End Date', _DatePickerField(
+            Expanded(child: _fld('Harvesting Date', _DatePickerField(
               controller: endCtrl,
               hint: 'YYYY-MM-DD',
               onPick: () async {
@@ -296,7 +296,7 @@ class _CropCard extends StatelessWidget {
             Row(children: [
               Expanded(child: _DateBox(label: 'PLANTATION', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
               const SizedBox(width: 8),
-              Expanded(child: _DateBox(label: 'HARVEST', value: crop.end.isNotEmpty ? AppUtils.formatDate(crop.end) : '—')),
+              Expanded(child: _DateBox(label: 'HARVESTING', value: crop.end.isNotEmpty ? AppUtils.formatDate(crop.end) : '—')),
             ]),
           ]),
         ),

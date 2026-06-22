@@ -9,7 +9,7 @@ class AppConstants {
   static const double mobileBreakpoint = 600;
   static const double tabletBreakpoint = 1024;
 
-  static const List<String> payModes = ['Cash', 'Online', 'Bank', 'Agnadiyu'];
+  static const List<String> payModes = ['Cash', 'Online', 'Bank', 'Angadia'];
   static const List<String> defaultCategories = [
     'Labour', 'Transport', 'Supplies', 'Fertilizer', 'Loan', 'Misc'
   ];
