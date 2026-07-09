@@ -37,6 +37,8 @@ class DashboardFilter {
 final dashboardFilterProvider =
 StateProvider<DashboardFilter>((ref) => const DashboardFilter());
 
+final dashboardSearchProvider = StateProvider<String>((ref) => '');
+
 // ── MAIN SHELL ────────────────────────────────────────────────────────────────
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -51,7 +53,14 @@ class _MainShellState extends ConsumerState<MainShell> {
       List.generate(AppPage.values.length, (_) => ScrollController());
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleHardwareKey);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     _scrollFocus.dispose();
     for (final c in _scrollCtrls) {
       c.dispose();
@@ -59,10 +68,13 @@ class _MainShellState extends ConsumerState<MainShell> {
     super.dispose();
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+  // Arrow keys can move focus to/from text fields, dropdowns, etc. and never
+  // bubble to a Focus/Shortcuts ancestor, so scroll the active page directly
+  // off the raw hardware key stream — this works no matter what has focus.
+  bool _handleHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
     final ctrl = _scrollCtrls[AppPage.values.indexOf(ref.read(currentPageProvider))];
-    if (!ctrl.hasClients) return KeyEventResult.ignored;
+    if (!ctrl.hasClients) return false;
     final pos = ctrl.position;
     double delta;
     switch (event.logicalKey) {
@@ -79,11 +91,11 @@ class _MainShellState extends ConsumerState<MainShell> {
         delta = -pos.viewportDimension * 0.9;
         break;
       default:
-        return KeyEventResult.ignored;
+        return false;
     }
     final target = (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent);
     ctrl.animateTo(target, duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
-    return KeyEventResult.handled;
+    return false;
   }
 
   @override
@@ -110,13 +122,16 @@ class _MainShellState extends ConsumerState<MainShell> {
         child: Focus(
           focusNode: _scrollFocus,
           autofocus: true,
-          onKeyEvent: _onKey,
           child: Padding(
             padding: EdgeInsets.all(isMobile ? 8 : 12),
             child: Column(
               children: [
                 _AppHeader(isMobile: isMobile),
                 const SizedBox(height: 8),
+                if (page == AppPage.dashboard) ...[
+                  const _DashboardSearchBar(),
+                  const SizedBox(height: 8),
+                ],
                 const _DateBar(),
                 const SizedBox(height: 8),
                 Expanded(
@@ -414,6 +429,22 @@ class _LogoutButton extends StatelessWidget {
         child: const Text('⎋ Logout',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary, fontFamily: 'Sora')),
+      ),
+    );
+  }
+}
+
+// ── DASHBOARD SEARCH BAR ───────────────────────────────────────────────────────
+class _DashboardSearchBar extends ConsumerWidget {
+  const _DashboardSearchBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: SearchField(
+        hint: 'Search activity...',
+        onChanged: (v) => ref.read(dashboardSearchProvider.notifier).state = v,
       ),
     );
   }

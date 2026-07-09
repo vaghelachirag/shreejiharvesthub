@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -118,12 +117,7 @@ class _State extends ConsumerState<ExpensesScreen> {
           ]))
               : Column(children: [
             Expanded(
-              child: Shortcuts(
-                shortcuts: const <ShortcutActivator, Intent>{
-                  SingleActivator(LogicalKeyboardKey.arrowUp): ScrollIntent(direction: AxisDirection.up),
-                  SingleActivator(LogicalKeyboardKey.arrowDown): ScrollIntent(direction: AxisDirection.down),
-                },
-                child: LayoutBuilder(builder: (context, constraints) {
+              child: LayoutBuilder(builder: (context, constraints) {
                 final isMobile = MediaQuery.of(context).size.width.isMobile;
                 if (isMobile) {
                   return ListView.separated(
@@ -248,7 +242,6 @@ class _State extends ConsumerState<ExpensesScreen> {
                   ),
                 );
               }),
-              ),
             ),
             Container(
               width: double.infinity,

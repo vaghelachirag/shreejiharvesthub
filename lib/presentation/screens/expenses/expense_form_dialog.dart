@@ -356,6 +356,66 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
   @override
   void dispose() { _focus.dispose(); super.dispose(); }
 
+  Widget _categoryDropdown() => Container(
+    height: 42,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.border2, width: 1.5)),
+    child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+      value: widget.categories.contains(widget.row.cat) ? widget.row.cat : widget.categories.first,
+      items: widget.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+      onChanged: (v) { widget.row.cat = v ?? widget.row.cat; widget.onChanged(); },
+      dropdownColor: AppColors.surface, isExpanded: true, isDense: true, style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
+    )),
+  );
+
+  Widget _descField(List<String> filtered) => TextField(
+    controller: widget.row.desc,
+    focusNode: _focus,
+    style: _kInputStyle,
+    decoration: _kDec('Expense description'),
+    onChanged: (v) { widget.onChanged(); setState(() => _showSugg = v.isNotEmpty && filtered.isNotEmpty); },
+    onTap: () => setState(() => _showSugg = filtered.isNotEmpty),
+  );
+
+  Widget _amountField() => TextField(
+    controller: widget.row.amount,
+    keyboardType: TextInputType.number,
+    style: _kInputStyle,
+    decoration: _kDec('Amount (₹)'),
+    onChanged: (_) => widget.onChanged(),
+  );
+
+  Widget _suggestions(List<String> filtered, {double marginLeft = 0}) => Container(
+    constraints: const BoxConstraints(maxHeight: 160),
+    margin: EdgeInsets.only(top: 2, left: marginLeft),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: AppColors.border2, width: 1.5),
+      boxShadow: AppShadows.shadow,
+    ),
+    child: ListView(shrinkWrap: true, padding: EdgeInsets.zero,
+      children: filtered.map((name) => InkWell(
+        onTap: () {
+          widget.row.desc.text = name;
+          widget.onChanged();
+          setState(() => _showSugg = false);
+          _focus.unfocus();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(children: [
+            const Icon(Icons.history, size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 7),
+            Text(name, style: _kInputStyle),
+          ]),
+        ),
+      )).toList(),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final filtered = widget.suggestions.where((s) {
@@ -363,74 +423,34 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
       return q.isEmpty || s.toLowerCase().contains(q);
     }).take(6).toList();
 
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
+
+    if (isMobile) {
+      return Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Expanded(child: _categoryDropdown()),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: _amountField()),
+          const SizedBox(width: 6),
+          _RemoveBtn(onTap: widget.onRemove),
+        ]),
+        const SizedBox(height: 6),
+        _descField(filtered),
+        if (_showSugg && filtered.isNotEmpty) _suggestions(filtered),
+      ]);
+    }
+
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Row(children: [
-        // Category dropdown
-        Flexible(flex: 2, child: Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: AppColors.border2, width: 1.5)),
-          child: DropdownButtonHideUnderline(child: DropdownButton<String>(
-            value: widget.categories.contains(widget.row.cat) ? widget.row.cat : widget.categories.first,
-            items: widget.categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-            onChanged: (v) { widget.row.cat = v ?? widget.row.cat; widget.onChanged(); },
-            dropdownColor: AppColors.surface, isExpanded: true, isDense: true, style: _kInputStyle.copyWith(fontWeight: FontWeight.w700),
-          )),
-        )),
+        Flexible(flex: 2, child: _categoryDropdown()),
         const SizedBox(width: 8),
-        // Amount field
-        Flexible(flex: 3, child: TextField(
-          controller: widget.row.desc,
-          focusNode: _focus,
-          style: _kInputStyle,
-          decoration: _kDec('Expense description'),
-          onChanged: (v) { widget.onChanged(); setState(() => _showSugg = v.isNotEmpty && filtered.isNotEmpty); },
-          onTap: () => setState(() => _showSugg = filtered.isNotEmpty),
-        )),
+        Flexible(flex: 3, child: _descField(filtered)),
         const SizedBox(width: 8),
-        // Amount
-        SizedBox(width: 110, child: TextField(
-          controller: widget.row.amount,
-          keyboardType: TextInputType.number,
-          style: _kInputStyle,
-          decoration: _kDec('Amount (₹)'),
-          onChanged: (_) => widget.onChanged(),
-        )),
+        SizedBox(width: 110, child: _amountField()),
         const SizedBox(width: 6),
         _RemoveBtn(onTap: widget.onRemove),
       ]),
-      // Suggestions dropdown
-      if (_showSugg && filtered.isNotEmpty)
-        Container(
-          constraints: const BoxConstraints(maxHeight: 160),
-          margin: const EdgeInsets.only(top: 2, left: 138),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: AppColors.border2, width: 1.5),
-            boxShadow: AppShadows.shadow,
-          ),
-          child: ListView(shrinkWrap: true, padding: EdgeInsets.zero,
-            children: filtered.map((name) => InkWell(
-              onTap: () {
-                widget.row.desc.text = name;
-                widget.onChanged();
-                setState(() => _showSugg = false);
-                _focus.unfocus();
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                child: Row(children: [
-                  const Icon(Icons.history, size: 13, color: AppColors.textTertiary),
-                  const SizedBox(width: 7),
-                  Text(name, style: _kInputStyle),
-                ]),
-              ),
-            )).toList(),
-          ),
-        ),
+      if (_showSugg && filtered.isNotEmpty) _suggestions(filtered, marginLeft: 138),
     ]);
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -108,12 +107,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           ]))
               : Column(children: [
             Expanded(
-              child: Shortcuts(
-                shortcuts: const <ShortcutActivator, Intent>{
-                  SingleActivator(LogicalKeyboardKey.arrowUp): ScrollIntent(direction: AxisDirection.up),
-                  SingleActivator(LogicalKeyboardKey.arrowDown): ScrollIntent(direction: AxisDirection.down),
-                },
-                child: LayoutBuilder(builder: (context, constraints) {
+              child: LayoutBuilder(builder: (context, constraints) {
                 final isMobile = MediaQuery.of(context).size.width.isMobile;
                 if (isMobile) {
                   // ── Mobile: card list ──
@@ -234,14 +228,20 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                             DataCell(Text(mandiName(s.mandiId), style: cellStyle)),
                             DataCell(Text(s.buyer, style: cellStyle.copyWith(fontWeight: FontWeight.w600))),
                             DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
-                            DataCell(Text(
-                              s.breakdown.isNotEmpty
-                                  ? s.breakdown.map((b) => b.quality).where((q) => q.isNotEmpty).join(', ')
-                                  : '—',
-                              style: cellStyle,
-                            )),
                             DataCell(
-                              s.breakdown.length > 1
+                              s.breakdown.isNotEmpty
+                                  ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: s.breakdown.map((b) => Text(
+                                  b.quality.isNotEmpty ? b.quality : '—',
+                                  style: cellStyle.copyWith(fontSize: 11),
+                                )).toList(),
+                              )
+                                  : Text('—', style: cellStyle),
+                            ),
+                            DataCell(
+                              s.breakdown.isNotEmpty
                                   ? Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -254,7 +254,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                                 }).toList(),
                               )
                                   : Text(
-                                s.rate > 0 ? '₹${s.rate.toStringAsFixed(0)}' : '—',
+                                s.rate > 0
+                                    ? '${AppUtils.formatNumber(s.qty)}kg × ₹${s.rate.toStringAsFixed(0)} = ${AppUtils.formatCurrency(s.qty * s.rate)}'
+                                    : '—',
                                 style: cellStyle,
                               ),
                             ),
@@ -292,7 +294,6 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   ),
                 );
               }),
-              ),
             ),
             Container(
               width: double.infinity,

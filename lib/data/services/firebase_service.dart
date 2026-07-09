@@ -21,6 +21,9 @@ class FirebaseService {
 
   Future<void> signOut() => _auth.signOut();
 
+  Future<void> sendPasswordResetEmail(String email) =>
+      _auth.sendPasswordResetEmail(email: email);
+
   // ── COLLECTION REFS ───────────────────────────────────────────────────────
   CollectionReference<Map<String, dynamic>> _col(String name) =>
       _db.collection('users').doc(uid).collection(name);

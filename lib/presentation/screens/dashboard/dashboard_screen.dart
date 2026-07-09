@@ -12,20 +12,15 @@ import '../../../data/providers/app_data_provider.dart';
 import '../../widgets/common/common_widgets.dart';
 import 'main_shell.dart';
 
-class DashboardScreen extends ConsumerStatefulWidget {
+class DashboardScreen extends ConsumerWidget {
   final ScrollController? scrollController;
   const DashboardScreen({super.key, this.scrollController});
-  @override
-  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  String _search = '';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final filter = ref.watch(dateFilterProvider);
     final dashFilter = ref.watch(dashboardFilterProvider);
+    final search = ref.watch(dashboardSearchProvider);
     final data = ref.watch(appDataProvider);
     final notifier = ref.read(appDataProvider);
 
@@ -48,7 +43,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
-            controller: widget.scrollController,
+            controller: scrollController,
             padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -91,35 +86,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         CardTitle(
                           title: 'Recent Activity',
-                          trailing: Wrap(
-                            spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              SearchField(
-                                hint: 'Search activity...',
-                                onChanged: (v) => setState(() => _search = v),
-                              ),
-                              _PdfButton(
-                                onTap: () => _exportPdf(
-                                  context: context,
-                                  sales: sales,
-                                  expenses: expenses,
-                                  farms: data.farms,
-                                  mandis: data.mandis,
-                                  crops: data.crops,
-                                  totalSales: totalSales,
-                                  totalExp: totalExp,
-                                  netProfit: netProfit,
-                                  totalQty: totalQty,
-                                ),
-                              ),
-                            ],
+                          trailing: _PdfButton(
+                            onTap: () => _exportPdf(
+                              context: context,
+                              sales: sales,
+                              expenses: expenses,
+                              farms: data.farms,
+                              mandis: data.mandis,
+                              crops: data.crops,
+                              totalSales: totalSales,
+                              totalExp: totalExp,
+                              netProfit: netProfit,
+                              totalQty: totalQty,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         _RecentActivityTable(
                           sales: sales, expenses: expenses,
                           farms: data.farms, mandis: data.mandis, crops: data.crops,
-                          search: _search,
+                          search: search,
                         ),
                       ],
                     ),

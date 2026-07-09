@@ -76,6 +76,7 @@ class _State extends ConsumerState<CropsScreen> {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final startCtrl = TextEditingController(text: existing?.start ?? '');
     final endCtrl = TextEditingController(text: existing?.end ?? '');
+    final cleanupCtrl = TextEditingController(text: existing?.cleanup ?? '');
     String farmId = existing?.farmId ?? '';
     final data = ref.read(appDataProvider);
     if (farmId.isEmpty && data.farms.isNotEmpty) farmId = data.farms.first.id;
@@ -135,6 +136,22 @@ class _State extends ConsumerState<CropsScreen> {
               },
             ))),
           ]),
+          const SizedBox(height: 10),
+          _fld('Cleanup Date', _DatePickerField(
+            controller: cleanupCtrl,
+            hint: 'YYYY-MM-DD',
+            onPick: () async {
+              final picked = await showDatePicker(
+                context: ctx,
+                initialDate: _parseDate(cleanupCtrl.text) ?? _parseDate(endCtrl.text) ?? DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) {
+                cleanupCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+              }
+            },
+          )),
           const SizedBox(height: 20),
           Container(padding: const EdgeInsets.only(top: 14),
               decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
@@ -148,6 +165,7 @@ class _State extends ConsumerState<CropsScreen> {
                     id: existing?.id ?? notifier.newId('c'),
                     farmId: farmId, name: nameCtrl.text.trim(),
                     start: startCtrl.text.trim(), end: endCtrl.text.trim(),
+                    cleanup: cleanupCtrl.text.trim(),
                   );
                   if (existing != null) notifier.updateCrop(crop); else notifier.addCrop(crop);
                   Navigator.pop(ctx);
@@ -297,6 +315,8 @@ class _CropCard extends StatelessWidget {
               Expanded(child: _DateBox(label: 'PLANTATION', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
               const SizedBox(width: 8),
               Expanded(child: _DateBox(label: 'HARVESTING', value: crop.end.isNotEmpty ? AppUtils.formatDate(crop.end) : '—')),
+              const SizedBox(width: 8),
+              Expanded(child: _DateBox(label: 'CLEANUP', value: crop.cleanup.isNotEmpty ? AppUtils.formatDate(crop.cleanup) : '—')),
             ]),
           ]),
         ),

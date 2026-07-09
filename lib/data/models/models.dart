@@ -63,21 +63,24 @@ class Crop {
   final String name;
   final String start;
   final String end;
+  final String cleanup;
 
-  const Crop({required this.id, required this.farmId, required this.name, this.start = '', this.end = ''});
+  const Crop({required this.id, required this.farmId, required this.name, this.start = '', this.end = '', this.cleanup = ''});
 
-  Crop copyWith({String? id, String? farmId, String? name, String? start, String? end}) =>
+  Crop copyWith({String? id, String? farmId, String? name, String? start, String? end, String? cleanup}) =>
       Crop(id: id ?? this.id, farmId: farmId ?? this.farmId,
-          name: name ?? this.name, start: start ?? this.start, end: end ?? this.end);
+          name: name ?? this.name, start: start ?? this.start, end: end ?? this.end,
+          cleanup: cleanup ?? this.cleanup);
 
   Map<String, dynamic> toJson() =>
-      {'id': id, 'farmId': farmId, 'name': name, 'start': start, 'end': end};
+      {'id': id, 'farmId': farmId, 'name': name, 'start': start, 'end': end, 'cleanup': cleanup};
 
   factory Crop.fromJson(Map<String, dynamic> j) => Crop(
     id: j['id'] as String, farmId: j['farmId'] as String,
     name: j['name'] as String,
     start: j['start'] as String? ?? '',
     end: j['end'] as String? ?? '',
+    cleanup: j['cleanup'] as String? ?? '',
   );
 }
 

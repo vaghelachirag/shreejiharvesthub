@@ -92,6 +92,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }*/
 
+  Future<String?> sendPasswordReset(String email) async {
+    try {
+      await _svc.sendPasswordResetEmail(email.trim());
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _friendlyError(e.code);
+    } catch (_) {
+      return 'An unexpected error occurred.';
+    }
+  }
+
   Future<void> logout() async {
     await _svc.signOut();
     state = const AuthState();

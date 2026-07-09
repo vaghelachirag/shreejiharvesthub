@@ -62,6 +62,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     // On error: dialog is closed, authState.error will show the error box
   }
 
+  void _showForgotPasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => _ForgotPasswordDialog(initialEmail: _emailCtrl.text.trim()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -159,6 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         onToggleObscure: () =>
                             setState(() => _obscureLogin = !_obscureLogin),
                         onSubmit: _doLogin,
+                        onForgotPassword: _showForgotPasswordDialog,
                       ),
                     ],
                   ),
@@ -349,6 +357,7 @@ class _SignInTab extends StatelessWidget {
   final String? error;
   final VoidCallback onToggleObscure;
   final VoidCallback onSubmit;
+  final VoidCallback onForgotPassword;
 
   const _SignInTab({
     required this.emailCtrl,
@@ -357,6 +366,7 @@ class _SignInTab extends StatelessWidget {
     required this.error,
     required this.onToggleObscure,
     required this.onSubmit,
+    required this.onForgotPassword,
   });
 
   @override
@@ -400,8 +410,29 @@ class _SignInTab extends StatelessWidget {
               )),
           onSubmitted: (_) => onSubmit(),
         ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: onForgotPassword,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Forgot password?',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.greenMid,
+                fontFamily: 'Sora',
+              ),
+            ),
+          ),
+        ),
         if (error != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           _ErrorBox(error!),
         ],
         const SizedBox(height: 24),
@@ -427,6 +458,174 @@ class _SignInTab extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+// ── FORGOT PASSWORD DIALOG ────────────────────────────────────────────────────
+class _ForgotPasswordDialog extends ConsumerStatefulWidget {
+  final String initialEmail;
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  @override
+  ConsumerState<_ForgotPasswordDialog> createState() =>
+      _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
+  late final TextEditingController _emailCtrl =
+      TextEditingController(text: widget.initialEmail);
+  bool _loading = false;
+  String? _error;
+  bool _sent = false;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Please enter your email address.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final error =
+        await ref.read(authProvider.notifier).sendPasswordReset(email);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = error;
+      _sent = error == null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        width: 340,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppShadows.shadowLg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Reset Password',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                fontFamily: 'Sora',
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _sent
+                  ? 'A password reset link has been sent. Check your inbox.'
+                  : 'Enter your account email and we\'ll send you a link to reset your password.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontFamily: 'Sora',
+              ),
+            ),
+            const SizedBox(height: 18),
+            if (!_sent) ...[
+              _Label('Email'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style: _kInputStyle,
+                decoration: _kDec('you@example.com'),
+                onSubmitted: (_) => _submit(),
+                autofocus: true,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _ErrorBox(_error!),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed:
+                          _loading ? null : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel',
+                          style: TextStyle(
+                              fontFamily: 'Sora', color: AppColors.textSecondary)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: AppColors.greenMid,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: _loading ? null : _submit,
+                      child: _loading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text(
+                              'Send Link',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                fontFamily: 'Sora',
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: AppColors.greenMid,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      fontFamily: 'Sora',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

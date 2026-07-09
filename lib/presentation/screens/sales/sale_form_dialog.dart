@@ -491,7 +491,12 @@ class _BuyerFieldState extends State<_BuyerField> {
       return q.isEmpty || s.toLowerCase().contains(q);
     }).take(8).toList();
 
-    return Column(mainAxisSize: MainAxisSize.min, children: [
+    return TapRegion(
+      onTapOutside: (_) {
+        if (_showDropdown) setState(() => _showDropdown = false);
+        if (_focus.hasFocus) _focus.unfocus();
+      },
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(
         controller: widget.controller,
         focusNode: _focus,
@@ -506,6 +511,11 @@ class _BuyerFieldState extends State<_BuyerField> {
           setState(() => _showDropdown = v.isNotEmpty && filtered.isNotEmpty);
         },
         onTap: () => setState(() => _showDropdown = filtered.isNotEmpty),
+        // Default TextField behavior unfocuses on tap-down outside, which would
+        // dismiss (and unmount) the suggestion list before its tap-up could
+        // register. Suppress that here; explicit dismissal is handled above
+        // and in the suggestion item's onTap below.
+        onTapOutside: (_) {},
       ),
       if (_showDropdown && filtered.isNotEmpty)
         Container(
@@ -538,7 +548,8 @@ class _BuyerFieldState extends State<_BuyerField> {
             )).toList(),
           ),
         ),
-    ]);
+      ]),
+    );
   }
 }
 
@@ -549,49 +560,74 @@ class _BreakdownRow extends StatelessWidget {
   final VoidCallback onChanged;
   const _BreakdownRow({required this.row, required this.onRemove, required this.onChanged});
 
+  Widget _removeBtn() => GestureDetector(
+    onTap: onRemove,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 28, height: 28,
+      decoration: BoxDecoration(
+        color: onRemove != null ? AppColors.redPale : AppColors.surface2,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: onRemove != null ? AppColors.red.withOpacity(0.25) : AppColors.border),
+      ),
+      child: Icon(Icons.close, size: 14,
+          color: onRemove != null ? AppColors.red : AppColors.textTertiary),
+    ),
+  );
+
+  Widget _qtyField() => TextField(
+    controller: row.qty,
+    keyboardType: TextInputType.number,
+    style: _kInputStyle,
+    decoration: _kDec('Qty (kg)'),
+    onChanged: (_) => onChanged(),
+  );
+
+  Widget _rateField() => TextField(
+    controller: row.rate,
+    keyboardType: TextInputType.number,
+    style: _kInputStyle,
+    decoration: _kDec('Rate (₹)'),
+    onChanged: (_) => onChanged(),
+  );
+
+  Widget _qualityField() => TextField(
+    controller: row.quality,
+    style: _kInputStyle,
+    decoration: _kDec('Quality'),
+    onChanged: (_) => onChanged(),
+  );
+
   @override
   Widget build(BuildContext context) {
     final sub = row.sub;
+    final isMobile = MediaQuery.of(context).size.width.isMobile;
+    final fields = isMobile
+        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(child: _qtyField()),
+              const SizedBox(width: 6),
+              Expanded(child: _rateField()),
+            ]),
+            const SizedBox(height: 6),
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Expanded(child: _qualityField()),
+              const SizedBox(width: 6),
+              _removeBtn(),
+            ]),
+          ])
+        : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Expanded(flex: 3, child: _qtyField()),
+            const SizedBox(width: 6),
+            Expanded(flex: 3, child: _rateField()),
+            const SizedBox(width: 6),
+            Expanded(flex: 4, child: _qualityField()),
+            const SizedBox(width: 6),
+            _removeBtn(),
+          ]);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Expanded(flex: 3, child: TextField(
-          controller: row.qty,
-          keyboardType: TextInputType.number,
-          style: _kInputStyle,
-          decoration: _kDec('Qty (kg)'),
-          onChanged: (_) => onChanged(),
-        )),
-        const SizedBox(width: 6),
-        Expanded(flex: 3, child: TextField(
-          controller: row.rate,
-          keyboardType: TextInputType.number,
-          style: _kInputStyle,
-          decoration: _kDec('Rate (₹)'),
-          onChanged: (_) => onChanged(),
-        )),
-        const SizedBox(width: 6),
-        Expanded(flex: 4, child: TextField(
-          controller: row.quality,
-          style: _kInputStyle,
-          decoration: _kDec('Quality'),
-          onChanged: (_) => onChanged(),
-        )),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: onRemove,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              color: onRemove != null ? AppColors.redPale : AppColors.surface2,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: onRemove != null ? AppColors.red.withOpacity(0.25) : AppColors.border),
-            ),
-            child: Icon(Icons.close, size: 14,
-                color: onRemove != null ? AppColors.red : AppColors.textTertiary),
-          ),
-        ),
-      ]),
+      fields,
       if (sub > 0) Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text('= ₹${sub.toStringAsFixed(0)}',
