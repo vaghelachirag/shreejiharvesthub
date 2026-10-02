@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -24,7 +24,43 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 
 class _State extends ConsumerState<ExpensesScreen> {
   String _search = '', _catFilter = '', _farmFilter = '', _mandiFilter = '', _cropFilter = '';
+  bool _sortAsc = false;
   int _page = 0;
+  final _hScrollController = ScrollController();
+  bool _hoveringTable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleGlobalKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKey);
+    _hScrollController.dispose();
+    super.dispose();
+  }
+
+  bool _handleGlobalKey(KeyEvent event) {
+    if (!_hoveringTable) return false;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (!_hScrollController.hasClients) return false;
+    const step = 60.0;
+    double? target;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      target = _hScrollController.offset + step;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      target = _hScrollController.offset - step;
+    }
+    if (target == null) return false;
+    _hScrollController.animateTo(
+      target.clamp(0.0, _hScrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +74,7 @@ class _State extends ConsumerState<ExpensesScreen> {
       allExp = allExp.where((e) =>
       e.desc.toLowerCase().contains(q) || e.cat.toLowerCase().contains(q)).toList();
     }
+    allExp.sort((a, b) => _sortAsc ? a.date.compareTo(b.date) : b.date.compareTo(a.date));
 
     final totalPages = (allExp.length / _kPageSize).ceil().clamp(1, 99999);
     final safePage   = _page.clamp(0, totalPages - 1);
@@ -104,6 +141,10 @@ class _State extends ConsumerState<ExpensesScreen> {
                   style: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
             ),
           ),
+          SortOrderButton(
+            ascending: _sortAsc,
+            onChanged: (v) => setState(() { _sortAsc = v; _page = 0; }),
+          ),
           _PdfBtn(onTap: () => _exportPdf(context, allExp, farmName, mandiName, cropName)),
         ]),
         const SizedBox(height: 12),
@@ -123,7 +164,7 @@ class _State extends ConsumerState<ExpensesScreen> {
                   return ListView.separated(
                     controller: widget.scrollController,
                     itemCount: pageExp.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final e = pageExp[i];
                       return Container(
@@ -178,14 +219,23 @@ class _State extends ConsumerState<ExpensesScreen> {
                   );
                 }
                 // ── Desktop/tablet: DataTable ──
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      controller: widget.scrollController,
-                      child: DataTable(
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hoveringTable = true),
+                  onExit: (_) => setState(() => _hoveringTable = false),
+                  child: Scrollbar(
+                  controller: _hScrollController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  notificationPredicate: (n) => n.depth == 0,
+                  child: SingleChildScrollView(
+                    controller: _hScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        controller: widget.scrollController,
+                        child: DataTable(
                         headingRowHeight: 38,
                         dataRowMinHeight: 46,
                         dataRowMaxHeight: 56,
@@ -194,36 +244,37 @@ class _State extends ConsumerState<ExpensesScreen> {
                         dividerThickness: 0.8,
                         headingRowColor: WidgetStateProperty.all(Colors.transparent),
                         columns: [
-                          DataColumn(label: _TH('Date')),
-                          DataColumn(label: _TH('Farm')),
-                          DataColumn(label: _TH('Crop')),
-                          DataColumn(label: _TH('Market')),
-                          DataColumn(label: _TH('Category')),
-                          DataColumn(label: _TH('Description')),
-                          DataColumn(label: _TH('Payment')),
-                          DataColumn(label: _TH('Amount (₹)'), numeric: true),
+                          DataColumn(label: _TH('Date'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Farm'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Crop'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Market'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Category'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Description'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Payment'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Amount (₹)'), headingRowAlignment: MainAxisAlignment.center),
                           DataColumn(label: _TH('')),
                         ],
                         rows: pageExp.map((e) => DataRow(
                           color: WidgetStateProperty.resolveWith((st) =>
                           st.contains(WidgetState.hovered) ? AppColors.amberPale.withOpacity(0.4) : null),
                           cells: [
-                            DataCell(Text(AppUtils.formatDate(e.date), style: cellStyle)),
-                            DataCell(Text(farmName(e.farmId), style: cellStyle)),
-                            DataCell(Text(cropName(e.cropId), style: cellStyle)),
-                            DataCell(Text(mandiName(e.mandiId), style: cellStyle)),
-                            DataCell(AppBadge(label: e.cat, variant: BadgeVariant.amber)),
-                            DataCell(SizedBox(width: 160,
+                            DataCell(Center(child: Text(AppUtils.formatDate(e.date), style: cellStyle))),
+                            DataCell(Center(child: Text(farmName(e.farmId), style: cellStyle))),
+                            DataCell(Center(child: Text(cropName(e.cropId), style: cellStyle))),
+                            DataCell(Center(child: Text(mandiName(e.mandiId), style: cellStyle))),
+                            DataCell(Center(child: AppBadge(label: e.cat, variant: BadgeVariant.amber))),
+                            DataCell(Center(child: SizedBox(width: 160,
                                 child: Text(e.desc,
                                     style: cellStyle.copyWith(fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis))),
-                            DataCell(AppBadge(label: e.payMode,
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis)))),
+                            DataCell(Center(child: AppBadge(label: e.payMode,
                                 variant: e.payMode == 'Cash'     ? BadgeVariant.green
                                     : e.payMode == 'Online'  ? BadgeVariant.blue
                                     : e.payMode == 'Bank'    ? BadgeVariant.blue
-                                    : BadgeVariant.amber)),  // Agnadiyu
-                            DataCell(Text(AppUtils.formatCurrency(e.amount),
-                                style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.amber))),
+                                    : BadgeVariant.amber))),  // Agnadiyu
+                            DataCell(Center(child: Text(AppUtils.formatCurrency(e.amount),
+                                style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.amber)))),
                             DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                               ActionIconButton(icon: Icons.edit_outlined,
                                   onTap: () => showExpenseFormDialog(context, ref, e)),
@@ -239,6 +290,8 @@ class _State extends ConsumerState<ExpensesScreen> {
                         )).toList(),
                       ),
                     ),
+                  ),
+                  ),
                   ),
                 );
               }),
@@ -381,7 +434,9 @@ Future<Uint8List> _buildExpensesPdf({
 
   final totalAmt    = expenses.fold<double>(0, (s, r) => s + r.amount);
   final Map<String, double> byCat = {};
-  for (final e in expenses) byCat[e.cat] = (byCat[e.cat] ?? 0) + e.amount;
+  for (final e in expenses) {
+    byCat[e.cat] = (byCat[e.cat] ?? 0) + e.amount;
+  }
   final catSorted   = byCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   final generatedOn = AppUtils.formatDate(DateTime.now().toIso8601String());
 
@@ -547,7 +602,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
             decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(3)),
             child: AnimatedBuilder(
               animation: _anim,
-              builder: (_, __) => ClipRRect(borderRadius: BorderRadius.circular(3),
+              builder: (_, _) => ClipRRect(borderRadius: BorderRadius.circular(3),
                   child: Align(alignment: Alignment.centerLeft,
                       child: FractionallySizedBox(widthFactor: _anim.value,
                           child: Container(decoration: BoxDecoration(
@@ -557,7 +612,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
           ),
           const SizedBox(height: 8),
           AnimatedBuilder(animation: _anim,
-              builder: (_, __) => Align(alignment: Alignment.centerRight,
+              builder: (_, _) => Align(alignment: Alignment.centerRight,
                   child: Text('${(_anim.value * 100).toInt()}%',
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
                           color: AppColors.textTertiary, fontFamily: 'Sora')))),

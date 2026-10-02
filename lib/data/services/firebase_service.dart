@@ -71,7 +71,9 @@ class FirebaseService {
     final batch  = _db.batch();
     batch.delete(_doc('farms', id));
     final mandis = await _col('mandis').where('farmId', isEqualTo: id).get();
-    for (final d in mandis.docs) batch.delete(d.reference);
+    for (final d in mandis.docs) {
+      batch.delete(d.reference);
+    }
     await batch.commit();
   }
 

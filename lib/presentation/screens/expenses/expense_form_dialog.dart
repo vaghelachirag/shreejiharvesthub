@@ -377,6 +377,7 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
     decoration: _kDec('Expense description'),
     onChanged: (v) { widget.onChanged(); setState(() => _showSugg = v.isNotEmpty && filtered.isNotEmpty); },
     onTap: () => setState(() => _showSugg = filtered.isNotEmpty),
+    onTapOutside: (_) {},
   );
 
   Widget _amountField() => TextField(
@@ -398,7 +399,7 @@ class _ExpBreakdownRowState extends State<_ExpBreakdownRow> {
     ),
     child: ListView(shrinkWrap: true, padding: EdgeInsets.zero,
       children: filtered.map((name) => InkWell(
-        onTap: () {
+        onTapDown: (_) {
           widget.row.desc.text = name;
           widget.onChanged();
           setState(() => _showSugg = false);

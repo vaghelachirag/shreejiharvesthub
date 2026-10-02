@@ -6,13 +6,30 @@ import '../../presentation/screens/splash/splash_screen.dart';
 import '../../presentation/screens/auth/login_screen.dart';
 import '../../presentation/screens/dashboard/main_shell.dart';
 
+// Notifies GoRouter to re-run `redirect` on auth changes, without ever
+// rebuilding the GoRouter itself — recreating it (e.g. via ref.watch(authProvider)
+// above) tears down the active Navigator/Overlay, which silently breaks any
+// dialog that happens to be open at that moment (e.g. the logout confirm dialog).
+class _AuthRefreshNotifier extends ChangeNotifier {
+  _AuthRefreshNotifier(Ref ref) {
+    ref.listen<AuthState>(authProvider, (_, _) => notifyListeners());
+  }
+}
+
+final _authRefreshProvider = Provider<_AuthRefreshNotifier>((ref) {
+  final notifier = _AuthRefreshNotifier(ref);
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final refresh = ref.watch(_authRefreshProvider);
 
   return GoRouter(
     initialLocation: '/splash',
+    refreshListenable: refresh,
     redirect: (context, state) {
-      final isLoggedIn = authState.isLoggedIn;
+      final isLoggedIn = ref.read(authProvider).isLoggedIn;
       final isSplash   = state.matchedLocation == '/splash';
       final isLogin    = state.matchedLocation == '/login';
 
@@ -22,17 +39,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login',  builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/login',  builder: (_, _) => const LoginScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
-          GoRoute(path: '/app/dashboard', builder: (_, __) => const _Stub()),
-          GoRoute(path: '/app/sales',     builder: (_, __) => const _Stub()),
-          GoRoute(path: '/app/expenses',  builder: (_, __) => const _Stub()),
-          GoRoute(path: '/app/crops',     builder: (_, __) => const _Stub()),
-          GoRoute(path: '/app/markets',   builder: (_, __) => const _Stub()),
-          GoRoute(path: '/app/farms',     builder: (_, __) => const _Stub()),
+          GoRoute(path: '/app/dashboard', builder: (_, _) => const _Stub()),
+          GoRoute(path: '/app/sales',     builder: (_, _) => const _Stub()),
+          GoRoute(path: '/app/expenses',  builder: (_, _) => const _Stub()),
+          GoRoute(path: '/app/crops',     builder: (_, _) => const _Stub()),
+          GoRoute(path: '/app/markets',   builder: (_, _) => const _Stub()),
+          GoRoute(path: '/app/farms',     builder: (_, _) => const _Stub()),
         ],
       ),
     ],

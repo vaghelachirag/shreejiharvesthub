@@ -21,6 +21,7 @@ class DashboardScreen extends ConsumerWidget {
     final filter = ref.watch(dateFilterProvider);
     final dashFilter = ref.watch(dashboardFilterProvider);
     final search = ref.watch(dashboardSearchProvider);
+    final sortOrder = ref.watch(dashboardSortOrderProvider);
     final data = ref.watch(appDataProvider);
     final notifier = ref.read(appDataProvider);
 
@@ -86,26 +87,36 @@ class DashboardScreen extends ConsumerWidget {
                       children: [
                         CardTitle(
                           title: 'Recent Activity',
-                          trailing: _PdfButton(
-                            onTap: () => _exportPdf(
-                              context: context,
-                              sales: sales,
-                              expenses: expenses,
-                              farms: data.farms,
-                              mandis: data.mandis,
-                              crops: data.crops,
-                              totalSales: totalSales,
-                              totalExp: totalExp,
-                              netProfit: netProfit,
-                              totalQty: totalQty,
-                            ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _SortOrderToggle(
+                                order: sortOrder,
+                                onChanged: (v) => ref.read(dashboardSortOrderProvider.notifier).state = v,
+                              ),
+                              const SizedBox(width: 8),
+                              _PdfButton(
+                                onTap: () => _exportPdf(
+                                  context: context,
+                                  sales: sales,
+                                  expenses: expenses,
+                                  farms: data.farms,
+                                  mandis: data.mandis,
+                                  crops: data.crops,
+                                  totalSales: totalSales,
+                                  totalExp: totalExp,
+                                  netProfit: netProfit,
+                                  totalQty: totalQty,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
                         _RecentActivityTable(
                           sales: sales, expenses: expenses,
                           farms: data.farms, mandis: data.mandis, crops: data.crops,
-                          search: search,
+                          search: search, sortOrder: sortOrder,
                         ),
                       ],
                     ),
@@ -122,6 +133,12 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 // ── PDF EXPORT ────────────────────────────────────────────────────────────────
+// The ₹ glyph depends on the Noto Sans font downloading successfully at
+// PDF-build time; when that download fails, printing silently falls back to
+// Helvetica, which has no ₹ glyph and renders a broken tofu box instead. Use
+// an ASCII-safe "Rs." prefix in the PDF so amounts always render correctly.
+String _pdfCurrency(num amount) => AppUtils.formatCurrency(amount).replaceAll('₹', 'Rs. ');
+
 Future<void> _exportPdf({
   required BuildContext context,
   required List<Sale> sales,
@@ -215,8 +232,12 @@ Future<Uint8List> _buildPdf({
 
   final Map<String, double> farmSales = {};
   final Map<String, double> farmExp   = {};
-  for (final s in sales)    farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
-  for (final e in expenses) farmExp[e.farmId]   = (farmExp[e.farmId]   ?? 0) + e.amount;
+  for (final s in sales) {
+    farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
+  }
+  for (final e in expenses) {
+    farmExp[e.farmId]   = (farmExp[e.farmId]   ?? 0) + e.amount;
+  }
 
   final generatedOn = AppUtils.formatDate(DateTime.now().toIso8601String());
 
@@ -255,11 +276,11 @@ Future<Uint8List> _buildPdf({
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: textPri)),
         pw.SizedBox(height: 10),
         pw.Row(children: [
-          _pdfMetric('Total Sales',    AppUtils.formatCurrency(totalSales), green),
+          _pdfMetric('Total Sales',    _pdfCurrency(totalSales), green),
           pw.SizedBox(width: 8),
-          _pdfMetric('Total Expenses', AppUtils.formatCurrency(totalExp),   red),
+          _pdfMetric('Total Expenses', _pdfCurrency(totalExp),   red),
           pw.SizedBox(width: 8),
-          _pdfMetric('Net Profit',     AppUtils.formatCurrency(netProfit),  netProfit >= 0 ? blue : amber),
+          _pdfMetric('Net Profit',     _pdfCurrency(netProfit),  netProfit >= 0 ? blue : amber),
           pw.SizedBox(width: 8),
           _pdfMetric('Production',     '${AppUtils.formatNumber(totalQty)} kg', amber),
         ]),
@@ -289,9 +310,9 @@ Future<Uint8List> _buildPdf({
                 final profit = fs - fe;
                 return pw.TableRow(children: [
                   _pdfTD(f.name),
-                  _pdfTD(AppUtils.formatCurrency(fs)),
-                  _pdfTD(AppUtils.formatCurrency(fe)),
-                  _pdfTDColor(AppUtils.formatCurrency(profit), profit >= 0 ? green : red),
+                  _pdfTD(_pdfCurrency(fs)),
+                  _pdfTD(_pdfCurrency(fe)),
+                  _pdfTDColor(_pdfCurrency(profit), profit >= 0 ? green : red),
                 ]);
               }),
             ],
@@ -322,7 +343,7 @@ Future<Uint8List> _buildPdf({
                     : '0.0';
                 return pw.TableRow(children: [
                   _pdfTD(entry.key),
-                  _pdfTD(AppUtils.formatCurrency(entry.value)),
+                  _pdfTD(_pdfCurrency(entry.value)),
                   _pdfTD('$pct%'),
                 ]);
               }),
@@ -370,7 +391,7 @@ Future<Uint8List> _buildPdf({
                 _pdfTD(row.desc.isNotEmpty ? row.desc : '-'),
                 _pdfTDBadge(row.isSale ? 'Sale' : 'Exp', row.isSale ? green : amber),
                 _pdfTDColor(
-                  (row.isSale ? '+' : '-') + AppUtils.formatCurrency(row.amount),
+                  (row.isSale ? '+' : '-') + _pdfCurrency(row.amount),
                   row.isSale ? green : red,
                 ),
               ])),
@@ -546,7 +567,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
                   color: AppColors.surface2, borderRadius: BorderRadius.circular(3)),
               child: AnimatedBuilder(
                 animation: _anim,
-                builder: (_, __) => ClipRRect(
+                builder: (_, _) => ClipRRect(
                   borderRadius: BorderRadius.circular(3),
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -567,7 +588,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
             const SizedBox(height: 8),
             AnimatedBuilder(
               animation: _anim,
-              builder: (_, __) => Align(
+              builder: (_, _) => Align(
                 alignment: Alignment.centerRight,
                 child: Text('${(_anim.value * 100).toInt()}%',
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
@@ -630,8 +651,12 @@ class _FarmSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final Map<String, double> farmSales = {};
     final Map<String, double> farmExp = {};
-    for (final s in sales) farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
-    for (final e in expenses) farmExp[e.farmId] = (farmExp[e.farmId] ?? 0) + e.amount;
+    for (final s in sales) {
+      farmSales[s.farmId] = (farmSales[s.farmId] ?? 0) + s.amount;
+    }
+    for (final e in expenses) {
+      farmExp[e.farmId] = (farmExp[e.farmId] ?? 0) + e.amount;
+    }
     final totalSales = sales.fold<double>(0, (s, r) => s + r.amount);
     final totalExp = expenses.fold<double>(0, (s, r) => s + r.amount);
 
@@ -653,19 +678,33 @@ class _FarmSummaryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Expanded(child: Text(f.name,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600, fontFamily: 'Sora'))),
-                      Text(
-                        profit >= 0
-                            ? '▲ ${AppUtils.formatCurrency(profit)}'
-                            : '▼ ${AppUtils.formatCurrency(profit.abs())}',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                            fontFamily: 'Sora',
-                            color: profit >= 0 ? AppColors.greenMid : AppColors.red),
+                    SizedBox(
+                      height: 20,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(f.name,
+                                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w600, fontFamily: 'Sora')),
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              profit >= 0
+                                  ? '▲ ${AppUtils.formatCurrency(profit)}'
+                                  : '▼ ${AppUtils.formatCurrency(profit.abs())}',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                                  fontFamily: 'Sora',
+                                  color: profit >= 0 ? AppColors.greenMid : AppColors.red),
+                            ),
+                          ),
+                        ],
                       ),
-                    ]),
+                    ),
                     const SizedBox(height: 4),
                     Row(children: [
                       Text('Sales: ${AppUtils.formatCurrency(fs)}',
@@ -683,15 +722,29 @@ class _FarmSummaryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.only(top: 8),
-              child: Row(children: [
-                const Expanded(child: Text('TOTAL NET',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
-                        fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.5))),
-                Text(AppUtils.formatCurrency(totalSales - totalExp),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                        fontFamily: 'Sora',
-                        color: (totalSales - totalExp) >= 0 ? AppColors.greenMid : AppColors.red)),
-              ]),
+              child: SizedBox(
+                height: 22,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('TOTAL NET',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                                fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.5)),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(AppUtils.formatCurrency(totalSales - totalExp),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
+                              fontFamily: 'Sora',
+                              color: (totalSales - totalExp) >= 0 ? AppColors.greenMid : AppColors.red)),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ],
@@ -818,10 +871,12 @@ class _RecentActivityTable extends StatelessWidget {
   final List<Mandi> mandis;
   final List<Crop> crops;
   final String search;
+  final DateSortOrder sortOrder;
 
   const _RecentActivityTable({
     required this.sales, required this.expenses, required this.farms,
     required this.mandis, required this.crops, this.search = '',
+    this.sortOrder = DateSortOrder.desc,
   });
 
   String _farmName(String id)  => AppUtils.farmName(farms, id);
@@ -839,7 +894,9 @@ class _RecentActivityTable extends StatelessWidget {
           date: e.date, category: e.cat, description: e.desc, farmId: e.farmId,
           mandiId: e.mandiId, cropId: e.cropId, qty: 0,
           amount: e.amount, isSale: false)),
-    ]..sort((a, b) => b.date.compareTo(a.date));
+    ]..sort((a, b) => sortOrder == DateSortOrder.desc
+        ? b.date.compareTo(a.date)
+        : a.date.compareTo(b.date));
 
     if (search.isNotEmpty) {
       final q = search.toLowerCase();
@@ -933,6 +990,44 @@ class _TH extends StatelessWidget {
   Widget build(BuildContext context) => Text(text.toUpperCase(),
       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
           fontFamily: 'Sora', color: AppColors.textTertiary, letterSpacing: 0.08));
+}
+
+class _SortOrderToggle extends StatelessWidget {
+  final DateSortOrder order;
+  final ValueChanged<DateSortOrder> onChanged;
+  const _SortOrderToggle({required this.order, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesc = order == DateSortOrder.desc;
+    return InkWell(
+      onTap: () => onChanged(isDesc ? DateSortOrder.asc : DateSortOrder.desc),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border2, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isDesc ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+              size: 14, color: AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isDesc ? 'NEWEST FIRST' : 'OLDEST FIRST',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora', color: AppColors.textSecondary, letterSpacing: 0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _PdfButton extends StatelessWidget {

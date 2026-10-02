@@ -39,6 +39,12 @@ StateProvider<DashboardFilter>((ref) => const DashboardFilter());
 
 final dashboardSearchProvider = StateProvider<String>((ref) => '');
 
+// ── DASHBOARD DATE SORT ORDER ─────────────────────────────────────────────────
+enum DateSortOrder { desc, asc }
+
+final dashboardSortOrderProvider =
+    StateProvider<DateSortOrder>((ref) => DateSortOrder.desc);
+
 // ── MAIN SHELL ────────────────────────────────────────────────────────────────
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -231,12 +237,13 @@ class _NavDrawer extends ConsumerWidget {
           // Logout
           InkWell(
             onTap: () async {
-              Navigator.of(context).pop();
               final ok = await showConfirmDialog(context,
                   title: 'Log out',
                   message: 'Log out of Shreeji Harvest Hub?',
                   confirmLabel: 'Log out',
                   isDangerous: false);
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
               if (ok) {
                 ref.read(authProvider.notifier).logout();
                 if (context.mounted) context.go('/login');
@@ -501,7 +508,7 @@ class _DateBar extends ConsumerWidget {
               onTap: () => ref.read(dateFilterProvider.notifier).previousPeriod()),
           const SizedBox(width: 6),
           if (!isAll)
-            _DatePickerButton(date: filter.activeDate,
+            _DatePickerButton(date: filter.activeDate, range: filter.range,
                 onPicked: (d) => ref.read(dateFilterProvider.notifier).setDate(d)),
           const SizedBox(width: 6),
           _ArrowBtn(icon: Icons.chevron_right, enabled: !isAll,
@@ -522,23 +529,29 @@ class _DateBar extends ConsumerWidget {
 
 class _DatePickerButton extends StatelessWidget {
   final DateTime date;
+  final DateRange range;
   final ValueChanged<DateTime> onPicked;
-  const _DatePickerButton({required this.date, required this.onPicked});
+  const _DatePickerButton({required this.date, required this.range, required this.onPicked});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () async {
-        final picked = await showDatePicker(
-          context: context, initialDate: date,
-          firstDate: DateTime(2020), lastDate: DateTime(2030),
-          builder: (context, child) => Theme(
-            data: Theme.of(context).copyWith(
-                colorScheme: Theme.of(context).colorScheme.copyWith(
-                    primary: AppColors.greenMid, onPrimary: Colors.white)),
-            child: child!,
-          ),
-        );
+        final picked = range == DateRange.month
+            ? await showDialog<DateTime>(
+                context: context,
+                builder: (_) => _MonthYearPickerDialog(initial: date),
+              )
+            : await showDatePicker(
+                context: context, initialDate: date,
+                firstDate: DateTime(2020), lastDate: DateTime(2030),
+                builder: (context, child) => Theme(
+                  data: Theme.of(context).copyWith(
+                      colorScheme: Theme.of(context).colorScheme.copyWith(
+                          primary: AppColors.greenMid, onPrimary: Colors.white)),
+                  child: child!,
+                ),
+              );
         if (picked != null) onPicked(picked);
       },
       borderRadius: BorderRadius.circular(8),
@@ -553,6 +566,69 @@ class _DatePickerButton extends StatelessWidget {
           const SizedBox(width: 6),
           Text(DateFormat('dd/MM/yyyy').format(date),
               style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontFamily: 'Sora')),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MonthYearPickerDialog extends StatefulWidget {
+  final DateTime initial;
+  const _MonthYearPickerDialog({required this.initial});
+  @override
+  State<_MonthYearPickerDialog> createState() => _MonthYearPickerDialogState();
+}
+
+class _MonthYearPickerDialogState extends State<_MonthYearPickerDialog> {
+  late int _year = widget.initial.year;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 320,
+        padding: const EdgeInsets.all(18),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            IconButton(icon: const Icon(Icons.chevron_left),
+                onPressed: () => setState(() => _year--)),
+            Text('$_year',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary, fontFamily: 'Sora')),
+            IconButton(icon: const Icon(Icons.chevron_right),
+                onPressed: () => setState(() => _year++)),
+          ]),
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.6,
+            children: List.generate(12, (i) {
+              final month = i + 1;
+              final isActive = month == widget.initial.month && _year == widget.initial.year;
+              return InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => Navigator.pop(context, DateTime(_year, month, 1)),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isActive ? AppColors.greenMid : AppColors.surface2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: isActive ? AppColors.greenMid : AppColors.border2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(DateFormat('MMM').format(DateTime(_year, month)),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                          color: isActive ? Colors.white : AppColors.textPrimary, fontFamily: 'Sora')),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          Align(alignment: Alignment.centerRight,
+              child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))),
         ]),
       ),
     );

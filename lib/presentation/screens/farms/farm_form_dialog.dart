@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../data/models/models.dart';
 import '../../../data/providers/app_data_provider.dart';
 
@@ -51,7 +50,11 @@ class _State extends ConsumerState<_FarmFormDialog> {
       area: _areaCtrl.text.trim(),
       address: _addrCtrl.text.trim(),
     );
-    if (widget.existing != null) notifier.updateFarm(farm); else notifier.addFarm(farm);
+    if (widget.existing != null) {
+      notifier.updateFarm(farm);
+    } else {
+      notifier.addFarm(farm);
+    }
     Navigator.pop(context);
   }
 

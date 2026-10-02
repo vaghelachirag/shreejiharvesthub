@@ -14,7 +14,7 @@ class AppConstants {
     'Labour', 'Transport', 'Supplies', 'Fertilizer', 'Loan', 'Misc'
   ];
   static const List<String> farmTypes = [
-    'Vegetable', 'Grain', 'Fruit', 'Dairy', 'Mixed', 'Other'
+    'Vegetable', 'Grain', 'Fruit', 'Dairy', 'Spices', 'Flowers', 'Mixed', 'Other'
   ];
 }
 

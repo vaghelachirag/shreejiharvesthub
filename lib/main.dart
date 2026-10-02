@@ -1,9 +1,20 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +35,7 @@ class ShreejiHarvestApp extends ConsumerWidget {
       title: 'Shreeji Harvest Hub',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
+      scrollBehavior: AppScrollBehavior(),
       routerConfig: router,
     );
   }

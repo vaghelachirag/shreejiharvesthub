@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_utils.dart';
 import '../../../data/models/models.dart';
@@ -53,7 +52,7 @@ class _State extends ConsumerState<CropsScreen> {
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: cols,
                 crossAxisSpacing: 12, mainAxisSpacing: 12,
-                childAspectRatio: 1.65,
+                childAspectRatio: 1.25,
               ),
               itemCount: crops.length,
               itemBuilder: (_, i) => _CropCard(
@@ -74,9 +73,14 @@ class _State extends ConsumerState<CropsScreen> {
 
   void _showCropForm(BuildContext context, Crop? existing) {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final startCtrl = TextEditingController(text: existing?.start ?? '');
-    final endCtrl = TextEditingController(text: existing?.end ?? '');
-    final cleanupCtrl = TextEditingController(text: existing?.cleanup ?? '');
+    String prepIso = existing?.preparationStart ?? '';
+    String startIso = existing?.start ?? '';
+    String endIso = existing?.end ?? '';
+    String cleanupIso = existing?.cleanup ?? '';
+    final prepCtrl = TextEditingController(text: _displayDate(prepIso));
+    final startCtrl = TextEditingController(text: _displayDate(startIso));
+    final endCtrl = TextEditingController(text: _displayDate(endIso));
+    final cleanupCtrl = TextEditingController(text: _displayDate(cleanupIso));
     String farmId = existing?.farmId ?? '';
     final data = ref.read(appDataProvider);
     if (farmId.isEmpty && data.farms.isNotEmpty) farmId = data.farms.first.id;
@@ -103,35 +107,60 @@ class _State extends ConsumerState<CropsScreen> {
             )),
           )),
           const SizedBox(height: 10),
+          _fld('Preparation Start Date', _DatePickerField(
+            controller: prepCtrl,
+            hint: 'DD/MM/YYYY',
+            onPick: () async {
+              final picked = await showDatePicker(
+                context: ctx,
+                initialDate: _parseDate(prepIso) ?? DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) {
+                setState(() {
+                  prepIso = _isoDate(picked);
+                  prepCtrl.text = _displayDate(prepIso);
+                });
+              }
+            },
+          )),
+          const SizedBox(height: 10),
           Row(children: [
             Expanded(child: _fld('Plantation Date', _DatePickerField(
               controller: startCtrl,
-              hint: 'YYYY-MM-DD',
+              hint: 'DD/MM/YYYY',
               onPick: () async {
                 final picked = await showDatePicker(
                   context: ctx,
-                  initialDate: _parseDate(startCtrl.text) ?? DateTime.now(),
+                  initialDate: _parseDate(startIso) ?? _parseDate(prepIso) ?? DateTime.now(),
                   firstDate: DateTime(2000),
                   lastDate: DateTime(2100),
                 );
                 if (picked != null) {
-                  startCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+                  setState(() {
+                    startIso = _isoDate(picked);
+                    startCtrl.text = _displayDate(startIso);
+                  });
                 }
               },
             ))),
             const SizedBox(width: 10),
             Expanded(child: _fld('Harvesting Date', _DatePickerField(
               controller: endCtrl,
-              hint: 'YYYY-MM-DD',
+              hint: 'DD/MM/YYYY',
               onPick: () async {
                 final picked = await showDatePicker(
                   context: ctx,
-                  initialDate: _parseDate(endCtrl.text) ?? _parseDate(startCtrl.text) ?? DateTime.now(),
+                  initialDate: _parseDate(endIso) ?? _parseDate(startIso) ?? DateTime.now(),
                   firstDate: DateTime(2000),
                   lastDate: DateTime(2100),
                 );
                 if (picked != null) {
-                  endCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+                  setState(() {
+                    endIso = _isoDate(picked);
+                    endCtrl.text = _displayDate(endIso);
+                  });
                 }
               },
             ))),
@@ -139,16 +168,19 @@ class _State extends ConsumerState<CropsScreen> {
           const SizedBox(height: 10),
           _fld('Cleanup Date', _DatePickerField(
             controller: cleanupCtrl,
-            hint: 'YYYY-MM-DD',
+            hint: 'DD/MM/YYYY',
             onPick: () async {
               final picked = await showDatePicker(
                 context: ctx,
-                initialDate: _parseDate(cleanupCtrl.text) ?? _parseDate(endCtrl.text) ?? DateTime.now(),
+                initialDate: _parseDate(cleanupIso) ?? _parseDate(endIso) ?? DateTime.now(),
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
               if (picked != null) {
-                cleanupCtrl.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+                setState(() {
+                  cleanupIso = _isoDate(picked);
+                  cleanupCtrl.text = _displayDate(cleanupIso);
+                });
               }
             },
           )),
@@ -164,10 +196,15 @@ class _State extends ConsumerState<CropsScreen> {
                   final crop = Crop(
                     id: existing?.id ?? notifier.newId('c'),
                     farmId: farmId, name: nameCtrl.text.trim(),
-                    start: startCtrl.text.trim(), end: endCtrl.text.trim(),
-                    cleanup: cleanupCtrl.text.trim(),
+                    preparationStart: prepIso,
+                    start: startIso, end: endIso,
+                    cleanup: cleanupIso,
                   );
-                  if (existing != null) notifier.updateCrop(crop); else notifier.addCrop(crop);
+                  if (existing != null) {
+                    notifier.updateCrop(crop);
+                  } else {
+                    notifier.addCrop(crop);
+                  }
                   Navigator.pop(ctx);
                 }, child: const Text('Save')),
               ])),
@@ -185,6 +222,15 @@ class _State extends ConsumerState<CropsScreen> {
 
   DateTime? _parseDate(String v) {
     try { return v.length == 10 ? DateTime.parse(v) : null; } catch (_) { return null; }
+  }
+
+  String _isoDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _displayDate(String iso) {
+    final d = _parseDate(iso);
+    if (d == null) return '';
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   }
 
   static const _s = TextStyle(fontSize: 13, color: AppColors.textPrimary, fontFamily: 'Sora');
@@ -312,8 +358,12 @@ class _CropCard extends StatelessWidget {
             const SizedBox(height: 10),
             // Dates
             Row(children: [
-              Expanded(child: _DateBox(label: 'PLANTATION', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
+              Expanded(child: _DateBox(label: 'PREPARATION', value: crop.preparationStart.isNotEmpty ? AppUtils.formatDate(crop.preparationStart) : '—')),
               const SizedBox(width: 8),
+              Expanded(child: _DateBox(label: 'PLANTATION', value: crop.start.isNotEmpty ? AppUtils.formatDate(crop.start) : '—')),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
               Expanded(child: _DateBox(label: 'HARVESTING', value: crop.end.isNotEmpty ? AppUtils.formatDate(crop.end) : '—')),
               const SizedBox(width: 8),
               Expanded(child: _DateBox(label: 'CLEANUP', value: crop.cleanup.isNotEmpty ? AppUtils.formatDate(crop.cleanup) : '—')),

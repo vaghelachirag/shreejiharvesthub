@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf/pdf.dart';
@@ -27,7 +27,36 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   String _farmFilter = '';
   String _mandiFilter = '';
   String _cropFilter = '';
+  bool _sortAsc = false;
   int _page = 0;
+  final _hScrollController = ScrollController();
+  final _hScrollFocusNode = FocusNode(debugLabel: 'SalesTableHScroll');
+
+  @override
+  void dispose() {
+    _hScrollController.dispose();
+    _hScrollFocusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleTableKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (!_hScrollController.hasClients) return KeyEventResult.ignored;
+    const step = 60.0;
+    double? target;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      target = _hScrollController.offset + step;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      target = _hScrollController.offset - step;
+    }
+    if (target == null) return KeyEventResult.ignored;
+    _hScrollController.animateTo(
+      target.clamp(0.0, _hScrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +69,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
       final q = _search.toLowerCase();
       allSales = allSales.where((s) => s.buyer.toLowerCase().contains(q)).toList();
     }
+    allSales.sort((a, b) => _sortAsc ? a.date.compareTo(b.date) : b.date.compareTo(a.date));
 
     final totalPages = (allSales.length / _kPageSize).ceil().clamp(1, 99999);
     final safePage   = _page.clamp(0, totalPages - 1);
@@ -94,6 +124,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             onChanged: (v) => setState(() { _cropFilter = v ?? ''; _page = 0; }),
           ),
           AddButton(label: '＋ Add Sale', onTap: () => showSaleFormDialog(context, ref)),
+          SortOrderButton(
+            ascending: _sortAsc,
+            onChanged: (v) => setState(() { _sortAsc = v; _page = 0; }),
+          ),
           _PdfBtn(onTap: () => _exportPdf(context, allSales, farmName, mandiName, cropName)),
         ]),
         const SizedBox(height: 12),
@@ -114,7 +148,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   return ListView.separated(
                     controller: widget.scrollController,
                     itemCount: pageSales.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final s = pageSales[i];
                       final quality = s.breakdown.isNotEmpty
@@ -188,9 +222,21 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                   );
                 }
                 // ── Desktop/tablet: DataTable ──
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
+                return Focus(
+                  focusNode: _hScrollFocusNode,
+                  onKeyEvent: _handleTableKey,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _hScrollFocusNode.requestFocus(),
+                    child: Scrollbar(
+                  controller: _hScrollController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  notificationPredicate: (n) => n.depth == 0,
+                  child: SingleChildScrollView(
+                    controller: _hScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
                     constraints: BoxConstraints(minWidth: constraints.maxWidth),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.vertical,
@@ -204,47 +250,50 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         dividerThickness: 0.8,
                         headingRowColor: WidgetStateProperty.all(Colors.transparent),
                         columns: [
-                          DataColumn(label: _TH('Date')),
-                          DataColumn(label: _TH('Farm')),
-                          DataColumn(label: _TH('Crop')),
-                          DataColumn(label: _TH('Market')),
-                          DataColumn(label: _TH('Buyer')),
-                          DataColumn(label: _TH('Qty (kg)'), numeric: true),
-                          DataColumn(label: _TH('Quality')),
-                          DataColumn(label: _TH('Rate ₹/kg'), numeric: true),
-                          DataColumn(label: _TH('Deduction'), numeric: true),
-                          DataColumn(label: _TH('Deduct Desc')),
-                          DataColumn(label: _TH('Payment')),
-                          DataColumn(label: _TH('Amount (₹)'), numeric: true),
+                          DataColumn(label: _TH('Date'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Farm'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Crop'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Market'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Buyer'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Qty (kg)'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Quality'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Rate ₹/kg'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Deduction'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Deduct Desc'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Payment'), headingRowAlignment: MainAxisAlignment.center),
+                          DataColumn(label: _TH('Amount (₹)'), headingRowAlignment: MainAxisAlignment.center),
                           DataColumn(label: _TH('')),
                         ],
                         rows: pageSales.map((s) => DataRow(
                           color: WidgetStateProperty.resolveWith((st) =>
                           st.contains(WidgetState.hovered) ? AppColors.greenPale : null),
                           cells: [
-                            DataCell(Text(AppUtils.formatDate(s.date), style: cellStyle)),
-                            DataCell(Text(farmName(s.farmId), style: cellStyle)),
-                            DataCell(Text(cropName(s.cropId), style: cellStyle)),
-                            DataCell(Text(mandiName(s.mandiId), style: cellStyle)),
-                            DataCell(Text(s.buyer, style: cellStyle.copyWith(fontWeight: FontWeight.w600))),
-                            DataCell(Text(AppUtils.formatNumber(s.qty), style: cellStyle)),
+                            DataCell(Center(child: Text(AppUtils.formatDate(s.date), style: cellStyle))),
+                            DataCell(Center(child: Text(farmName(s.farmId), style: cellStyle))),
+                            DataCell(Center(child: Text(cropName(s.cropId), style: cellStyle))),
+                            DataCell(Center(child: Text(mandiName(s.mandiId), style: cellStyle))),
+                            DataCell(Center(child: Text(s.buyer, style: cellStyle.copyWith(fontWeight: FontWeight.w600)))),
+                            DataCell(Center(child: Text(AppUtils.formatNumber(s.qty), style: cellStyle))),
                             DataCell(
-                              s.breakdown.isNotEmpty
-                                  ? Column(
+                              Center(
+                                child: s.breakdown.isNotEmpty
+                                    ? Column(
                                 mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: s.breakdown.map((b) => Text(
                                   b.quality.isNotEmpty ? b.quality : '—',
                                   style: cellStyle.copyWith(fontSize: 11),
                                 )).toList(),
                               )
                                   : Text('—', style: cellStyle),
+                              ),
                             ),
                             DataCell(
-                              s.breakdown.isNotEmpty
-                                  ? Column(
+                              Center(
+                                child: s.breakdown.isNotEmpty
+                                    ? Column(
                                 mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: s.breakdown.map((b) {
                                   final lineAmt = b.qty * b.rate;
                                   return Text(
@@ -259,18 +308,19 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                                     : '—',
                                 style: cellStyle,
                               ),
+                              ),
                             ),
-                            DataCell(Text(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '—', style: cellStyle)),
-                            DataCell(Text(s.deductDesc.isNotEmpty ? s.deductDesc : '—', style: cellStyle)),
-                            DataCell(AppBadge(
+                            DataCell(Center(child: Text(s.deduction > 0 ? '-${AppUtils.formatCurrency(s.deduction)}' : '—', style: cellStyle))),
+                            DataCell(Center(child: Text(s.deductDesc.isNotEmpty ? s.deductDesc : '—', style: cellStyle))),
+                            DataCell(Center(child: AppBadge(
                               label: s.payMode,
                               variant: s.payMode == 'Cash'     ? BadgeVariant.green
                                   : s.payMode == 'Online'  ? BadgeVariant.blue
                                   : s.payMode == 'Bank'    ? BadgeVariant.blue
                                   : BadgeVariant.amber,   // Agnadiyu + Other
-                            )),
-                            DataCell(Text(AppUtils.formatCurrency(s.amount),
-                                style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.greenMid))),
+                            ))),
+                            DataCell(Center(child: Text(AppUtils.formatCurrency(s.amount),
+                                style: cellStyle.copyWith(fontWeight: FontWeight.w700, color: AppColors.greenMid)))),
                             DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                               ActionIconButton(
                                 icon: Icons.edit_outlined,
@@ -291,6 +341,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         )).toList(),
                       ),
                     ),
+                  ),
+                  ),
+                  ),
                   ),
                 );
               }),
@@ -580,7 +633,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
             decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(3)),
             child: AnimatedBuilder(
               animation: _anim,
-              builder: (_, __) => ClipRRect(borderRadius: BorderRadius.circular(3),
+              builder: (_, _) => ClipRRect(borderRadius: BorderRadius.circular(3),
                   child: Align(alignment: Alignment.centerLeft,
                       child: FractionallySizedBox(widthFactor: _anim.value,
                           child: Container(decoration: BoxDecoration(
@@ -590,7 +643,7 @@ class _PdfProgressDialogState extends State<_PdfProgressDialog>
           ),
           const SizedBox(height: 8),
           AnimatedBuilder(animation: _anim,
-              builder: (_, __) => Align(alignment: Alignment.centerRight,
+              builder: (_, _) => Align(alignment: Alignment.centerRight,
                   child: Text('${(_anim.value * 100).toInt()}%',
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
                           color: AppColors.textTertiary, fontFamily: 'Sora')))),

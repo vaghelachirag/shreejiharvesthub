@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'auth_provider.dart';
 import 'data/models/models.dart';
 import 'data/providers/auth_provider.dart';
 import 'data/services/firebase_service.dart';
@@ -169,19 +168,19 @@ class FirebaseDataActions {
 // These MUST be top-level functions, not nested lambdas.
 
 List<Farm> _xFarms(AsyncValue<List<Farm>> v) =>
-    v.when(data: (d) => d, loading: () => <Farm>[], error: (_, __) => <Farm>[]);
+    v.when(data: (d) => d, loading: () => <Farm>[], error: (_, _) => <Farm>[]);
 
 List<Mandi> _xMandis(AsyncValue<List<Mandi>> v) =>
-    v.when(data: (d) => d, loading: () => <Mandi>[], error: (_, __) => <Mandi>[]);
+    v.when(data: (d) => d, loading: () => <Mandi>[], error: (_, _) => <Mandi>[]);
 
 List<Crop> _xCrops(AsyncValue<List<Crop>> v) =>
-    v.when(data: (d) => d, loading: () => <Crop>[], error: (_, __) => <Crop>[]);
+    v.when(data: (d) => d, loading: () => <Crop>[], error: (_, _) => <Crop>[]);
 
 List<Sale> _xSales(AsyncValue<List<Sale>> v) =>
-    v.when(data: (d) => d, loading: () => <Sale>[], error: (_, __) => <Sale>[]);
+    v.when(data: (d) => d, loading: () => <Sale>[], error: (_, _) => <Sale>[]);
 
 List<Expense> _xExpenses(AsyncValue<List<Expense>> v) =>
-    v.when(data: (d) => d, loading: () => <Expense>[], error: (_, __) => <Expense>[]);
+    v.when(data: (d) => d, loading: () => <Expense>[], error: (_, _) => <Expense>[]);
 
 // ── COMPAT SHIM ───────────────────────────────────────────────────────────────
 // Public class name (no underscore) so screens can reference it without a cast.

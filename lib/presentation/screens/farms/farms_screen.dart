@@ -100,7 +100,7 @@ class FarmsScreen extends ConsumerWidget {
                 return ListView.separated(
                   controller: scrollController,
                   itemCount: farmWidgets.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (_, i) => SizedBox(height: 320, child: farmWidgets[i]),
                 );
               }

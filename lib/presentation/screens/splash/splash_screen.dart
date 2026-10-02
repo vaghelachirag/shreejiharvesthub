@@ -135,7 +135,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         width: 180,
                         child: AnimatedBuilder(
                           animation: _progressAnim,
-                          builder: (_, __) => ClipRRect(
+                          builder: (_, _) => ClipRRect(
                             borderRadius: BorderRadius.circular(3),
                             child: LinearProgressIndicator(
                               value: _progressAnim.value,

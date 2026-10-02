@@ -4,7 +4,7 @@ import '../../data/models/models.dart';
 class AppUtils {
   static final _inrFormatter  = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
   static final _numFormatter  = NumberFormat('#,##,###', 'en_IN');
-  static final _dateFormatter = DateFormat('dd MMM yyyy');
+  static final _dateFormatter = DateFormat('dd/MM/yyyy');
   static final _monthFormatter = DateFormat('MMMM yyyy');
 
   static String formatCurrency(num amount) => _inrFormatter.format(amount);

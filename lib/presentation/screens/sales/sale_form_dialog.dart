@@ -117,7 +117,9 @@ class _State extends ConsumerState<_SaleFormDialog> {
     HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     _buyerCtrl.dispose(); _deductCtrl.dispose(); _deductDescCtrl.dispose();
     _scrollCtrl.dispose();
-    for (final r in _rows) r.dispose();
+    for (final r in _rows) {
+      r.dispose();
+    }
     super.dispose();
   }
 
@@ -184,8 +186,11 @@ class _State extends ConsumerState<_SaleFormDialog> {
       payMode:    _payMode,
       breakdown:  breakdown,
     );
-    if (widget.existing != null) notifier.updateSale(sale);
-    else notifier.addSale(sale);
+    if (widget.existing != null) {
+      notifier.updateSale(sale);
+    } else {
+      notifier.addSale(sale);
+    }
     Navigator.pop(context);
   }
 

@@ -198,19 +198,19 @@ class FirebaseDataActions {
 
 /// Safely extract List<Farm> from AsyncValue without losing type in release mode.
 List<Farm> _safeFarms(AsyncValue<List<Farm>> av) =>
-    av.when(data: (v) => v, loading: () => <Farm>[], error: (_, __) => <Farm>[]);
+    av.when(data: (v) => v, loading: () => <Farm>[], error: (_, _) => <Farm>[]);
 
 List<Mandi> _safeMandis(AsyncValue<List<Mandi>> av) =>
-    av.when(data: (v) => v, loading: () => <Mandi>[], error: (_, __) => <Mandi>[]);
+    av.when(data: (v) => v, loading: () => <Mandi>[], error: (_, _) => <Mandi>[]);
 
 List<Crop> _safeCrops(AsyncValue<List<Crop>> av) =>
-    av.when(data: (v) => v, loading: () => <Crop>[], error: (_, __) => <Crop>[]);
+    av.when(data: (v) => v, loading: () => <Crop>[], error: (_, _) => <Crop>[]);
 
 List<Sale> _safeSales(AsyncValue<List<Sale>> av) =>
-    av.when(data: (v) => v, loading: () => <Sale>[], error: (_, __) => <Sale>[]);
+    av.when(data: (v) => v, loading: () => <Sale>[], error: (_, _) => <Sale>[]);
 
 List<Expense> _safeExpenses(AsyncValue<List<Expense>> av) =>
-    av.when(data: (v) => v, loading: () => <Expense>[], error: (_, __) => <Expense>[]);
+    av.when(data: (v) => v, loading: () => <Expense>[], error: (_, _) => <Expense>[]);
 
 final appDataProvider = Provider<_AppDataCompat>((ref) {
   // Use typed helper functions — NOT .valueOrNull which erases generics

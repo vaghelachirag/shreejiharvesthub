@@ -326,7 +326,7 @@ Future<bool> showConfirmDialog(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       title: Text(title),
       content: Text(message,
           style: const TextStyle(
@@ -335,14 +335,14 @@ Future<bool> showConfirmDialog(
               height: 1.5)),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: () => Navigator.pop(dialogContext, false),
           child: Text(cancelLabel,
               style: const TextStyle(color: AppColors.textSecondary)),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
               backgroundColor: isDangerous ? AppColors.red : AppColors.greenMid),
-          onPressed: () => Navigator.pop(context, true),
+          onPressed: () => Navigator.pop(dialogContext, true),
           child: Text(confirmLabel),
         ),
       ],
@@ -436,6 +436,51 @@ class SearchField extends StatelessWidget {
                   const BorderSide(color: AppColors.greenLight, width: 1.5)),
           filled: true,
           fillColor: AppColors.surface2,
+        ),
+      ),
+    );
+  }
+}
+
+// ── SORT ORDER BUTTON ─────────────────────────────────────────────────────────
+class SortOrderButton extends StatelessWidget {
+  final bool ascending;
+  final ValueChanged<bool> onChanged;
+
+  const SortOrderButton({super.key, required this.ascending, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!ascending),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border2, width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 14,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              ascending ? 'OLDEST FIRST' : 'NEWEST FIRST',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora',
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.4),
+            ),
+          ],
         ),
       ),
     );
